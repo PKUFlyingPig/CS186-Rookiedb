@@ -19,7 +19,7 @@ following locations:
 | [Project 3: Joins and Query Optimization](https://cs186.gitbook.io/project/assignments/proj3) | Tuesday, 2/23/2021  |
 | [Project 4: Concurrency](https://cs186.gitbook.io/project/assignments/proj4)                  | Tuesday, 3/16/2021  |
 | [Project 5: Recovery](https://cs186.gitbook.io/project/assignments/proj5)                     | Saturday, 4/10/2021 |
-| [Project 6: NoSQL](https://cs186.gitbook.io/project/assignments/pro6)                         | Friday, 4/24/2021   |
+| [Project 6: NoSQL](https://cs186.gitbook.io/project/assignments/proj6)                         | Friday, 4/24/2021   |
 
 ## Overview
 
