@@ -1,0 +1,16 @@
+cid int,name string(20),department string(20)
+1,CS 186,Computer Science
+2,CS 61A,Computer Science
+3,BIO 1A,Biology
+4,BIO 1B,Biology
+5,CHEM 1A,Chemistry
+6,CHEM 4A,Chemistry
+7,UGBA 10,Business
+8,UGBA 196,Business
+9,ART 10,Art History
+10,ART 100,Art History
+11,ZOO 15,Zoology
+12,ZOO 137B,Zoology
+13,CS 162,Computer Science
+14,BIO 100,Biology
+15,CS 61C,Computer Science

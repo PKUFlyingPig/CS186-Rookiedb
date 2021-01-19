@@ -1,0 +1,201 @@
+sid int,name string(20),major string(20),gpa float
+1,Augustina Mazzoni,Chemistry,1.005420210172708
+2,Rachel Nugent,Art History,3.872256353606213
+3,Wilburn Lamson,Art History,2.886956910371463
+4,Sharilyn Havens,Biology,2.9571260727339514
+5,Jonah Vanhoy,Chemistry,1.757128473162053
+6,Elijah Pinnix,Business,1.0981805569522254
+7,Darron Bladen,Business,1.0759229784499584
+8,Caprice Verdin,Business,1.8687480647602839
+9,Ramiro Mauriello,Biology,3.671119895688771
+10,Adriene Moeller,CS,2.511224621628675
+11,Keenan Toller,Zoology,2.0095761891916935
+12,Krishna Shiflett,Biology,3.132715066590464
+13,Tijuana Emberton,Business,1.519926413227835
+14,Brenda Notaro,Business,2.4723359821511006
+15,Harley Rhynes,Art History,3.9537853409191803
+16,Joannie Leaver,Business,1.3904102805440584
+17,Leota Mecham,Chemistry,1.7842792468434356
+18,Zella Forth,Business,3.265014134538361
+19,Elden Pecor,Art History,1.725189630557897
+20,Kellye Waller,Biology,3.549029200124181
+21,Jorge Stjames,Chemistry,2.6693979910304773
+22,Lino Mona,Chemistry,3.0235158982574903
+23,Hui Ogata,CS,1.1141306033665095
+24,Suzy Hynson,Chemistry,1.8489339514475187
+25,Patrica Romney,Biology,2.4493228757109695
+26,Vikki Dickinson,Business,2.0164438430296743
+27,Maryanne File,Business,1.80718011606369
+28,Thomas Neese,Biology,2.509270952111554
+29,Yukiko Mitts,Zoology,2.0263705831170165
+30,Malia Maring,Zoology,1.5802372260931592
+31,Phylicia Raphael,CS,3.663960034313729
+32,Anjelica Cortinas,CS,1.5873498632723777
+33,Dierdre Jeffers,CS,3.750047396982882
+34,Janelle Wireman,Zoology,1.1683512393715647
+35,Tracey Herdon,CS,2.6027620276199865
+36,Shaneka Mannings,Business,1.362897151527899
+37,Frieda Baize,Business,1.2015557716783654
+38,Fumiko Tsao,Art History,3.127481525747611
+39,Pansy Mumaw,Biology,2.0379136590364046
+40,Senaida Rutherford,Chemistry,1.4132778263831318
+41,Tessa Lipscomb,Zoology,3.980650875715811
+42,Abel Henningsen,Biology,1.956925561862458
+43,Mina Tiedeman,CS,3.7629902969401794
+44,Maryjane Tippie,Business,2.1591182312108295
+45,Deadra Mulhall,Art History,3.5089762682364305
+46,Yevette Lanoue,Business,2.8830213815651122
+47,Kenya Reeve,Zoology,1.1912302669817527
+48,Chin Lindon,Chemistry,3.441029036700732
+49,Federico Holley,Business,2.113072417690852
+50,Florrie Mattie,Zoology,2.7814934226269017
+51,Eugenio Jacobus,Biology,1.4428809443186754
+52,Toshiko Vanwagenen,Art History,2.1387345746520303
+53,Susanne Haugland,Zoology,3.3137135936332642
+54,Joannie Everman,Business,3.7609962062645317
+55,Johnny Bliss,Business,1.9686421162550254
+56,Ione Schuck,Chemistry,2.3369857817742132
+57,Lauren Riemann,Business,2.31167086135883
+58,Shawnee Merle,Business,2.4319340650736225
+59,Cathie Kilduff,Chemistry,3.479132908238493
+60,Aron Veach,Business,3.4528583927823
+61,Mable Faux,Art History,3.500354461633917
+62,Lakeesha Shew,CS,3.3956461331174586
+63,Jacquiline Soder,Chemistry,1.1217747033745442
+64,Gavin Carley,Chemistry,3.665337948428652
+65,Kimberley Grazier,Chemistry,1.607617018265236
+66,Bradford Raffield,Biology,3.262817033281434
+67,Domonique Fernald,CS,1.226340331580115
+68,Francene Chenail,Chemistry,1.4574112493314246
+69,Keiko Sherer,Zoology,3.26035983169056
+70,Leopoldo Hoekstra,Chemistry,2.955967087798275
+71,Abby Wilmeth,Business,2.1280911075537907
+72,Ophelia Paules,Business,1.9187812077168966
+73,Maren Coombe,Business,3.0202261409881137
+74,Young Pine,Business,3.5738091075883593
+75,Marva Venegas,CS,2.0158610815017783
+76,Dianne Underdown,Zoology,1.569729137308229
+77,Tijuana Miranda,Zoology,2.2306690592916594
+78,Solange Godley,Art History,2.056882817169261
+79,Kareen Klemme,Chemistry,3.605818437551586
+80,Mckenzie Krogh,Zoology,3.615648967769329
+81,Benjamin Cooter,Art History,3.006321167717683
+82,Jacinda Crumbley,Art History,1.561227372385432
+83,Eli Dillahunty,Art History,2.8505374968398174
+84,Maude Mcclintock,Zoology,1.935996082606244
+85,Noriko Neilson,Zoology,3.1178359672805076
+86,Lorena Maynor,CS,3.9255997412863244
+87,Mari Moultry,Art History,3.533880402333662
+88,Loni Straughan,CS,1.3106762079967593
+89,Shiloh Gable,Zoology,3.277365216516241
+90,Pinkie Castleman,Biology,3.976364623970541
+91,Cleta Gast,CS,1.0347560732136325
+92,Raquel Beason,Chemistry,1.5485334747991533
+93,Cameron Riggenbach,Business,1.8096741573969957
+94,Erminia Selfridge,CS,2.5332871920084825
+95,Elois Kyler,Chemistry,2.67582677795827
+96,Carson Kingery,Biology,3.399376612065245
+97,Isela Rivers,Zoology,1.1725424100482318
+98,Natacha Burchfield,Art History,2.941274064997769
+99,Ursula Armstrong,Biology,2.190513137542306
+100,Junior Halderman,Chemistry,1.4156586247487972
+101,Sibyl Pinnell,Business,3.443426546750993
+102,Donnell Stelle,CS,3.1076183500117085
+103,Chelsea Holderman,Art History,3.0893242848159956
+104,Nicole Amos,Zoology,2.199267560975421
+105,Jerrica Nowacki,Zoology,3.354563061020292
+106,Taunya Boddy,Art History,1.4282549174382344
+107,Florine Emigh,Zoology,2.101815544958494
+108,Corene Barkley,Art History,3.548484599923123
+109,Taylor Caggiano,Zoology,3.257408083426325
+110,Lashell Castelli,Business,2.5023599094832236
+111,Georgann Lax,CS,3.667080707847653
+112,Renate Manson,Business,1.5608868610525548
+113,Carlyn Lanser,CS,1.6895447179107057
+114,Beckie Vidaurri,Biology,1.1371815835381986
+115,Karolyn Branscum,CS,2.9283235498420406
+116,Elfreda Enfinger,Business,2.471069184859428
+117,Onie Parker,Business,3.2167107231063556
+118,Eugenie Moreau,Chemistry,2.0589164276197347
+119,Selma Nibert,Business,3.4786675783132104
+120,Starr Overson,Art History,2.773724964759487
+121,Yoshie Glueck,Chemistry,3.5093921196828064
+122,Rigoberto Keegan,Biology,1.3346799265166047
+123,Bianca Kirchner,Business,3.251528689128719
+124,Alita Faulkner,Zoology,2.0647624591716895
+125,Dia Hosch,Chemistry,1.4940877000854007
+126,Carlota Sergeant,Chemistry,2.43811472141723
+127,Lizzie Eisert,Chemistry,1.211964439022407
+128,Charlie Kisner,Art History,2.7562745971588845
+129,Sheryll Angevine,Art History,2.7996307121550137
+130,Ivan Swaney,Business,2.250886803698565
+131,Tanner Berndt,Art History,3.9211488674305635
+132,Almeta Bisceglia,Biology,1.0564758304416297
+133,Von Kimberly,Business,3.4724789756919985
+134,Kassandra Lauderback,Business,2.948091249965167
+135,Bobbie Atkins,Business,3.07600986019198
+136,Theola Moates,Zoology,3.571994920981793
+137,Normand Abernathy,Zoology,1.8739601623550368
+138,Hanna Kuiper,Chemistry,2.4710137025581136
+139,Ingeborg Appling,CS,1.808538137875484
+140,Williams Royer,Biology,2.133217915282454
+141,Vannesa Delgiudice,Zoology,2.0042654121276375
+142,Maximina Lombard,CS,1.3655362590477806
+143,Aleta Vandine,Biology,2.675354514412378
+144,Grover Hoggatt,Zoology,3.0602615998339706
+145,Arlyne Mccaulley,Zoology,2.886748456496785
+146,Halina Tinner,Art History,3.690549060628541
+147,Jayson Frankum,Art History,3.791576509800353
+148,Daniella Weingarten,Zoology,1.4551314267167865
+149,Justin Bain,Biology,1.9057009751145935
+150,Sarita Voigt,Biology,2.7827870498865677
+151,Darren Bartolomeo,Chemistry,3.731273043555529
+152,Melodi Hinerman,Business,3.032679105389611
+153,Kina Herrada,Biology,2.272396577530438
+154,Dalene Coachman,CS,2.5128426635276857
+155,Peggie Lenoir,Business,2.398568157853456
+156,Alane Crawshaw,Art History,1.801003654479133
+157,Aurora Terry,Zoology,3.3564203402768396
+158,Angila Romine,Chemistry,1.8492064179334262
+159,Reinaldo Bjorklund,Art History,1.8264880086475288
+160,Nikita Mccrum,Biology,1.3047318153857783
+161,Mikki Sroka,Chemistry,1.0102279874316729
+162,George Marshburn,Zoology,2.8472217875500796
+163,Theda Frye,CS,1.1143589032894488
+164,Ivonne Rudd,CS,2.565551265903017
+165,Corrin Francois,Chemistry,2.9075940422314304
+166,Joaquin June,Biology,3.3945678678794966
+167,Diego Durand,Zoology,3.369793535166474
+168,Grover Navarre,Art History,1.9345595099139348
+169,Bok Artist,Zoology,3.370670492459216
+170,Roberto Blazier,CS,1.4993471648642085
+171,Isadora Gavin,Zoology,1.3247776094970245
+172,Christene Mccloud,Business,1.9554346250471144
+173,Leticia Metcalf,CS,1.6756784309503145
+174,Hank Number,Zoology,1.0490619034894548
+175,Coretta Stefano,Art History,3.7332752903301785
+176,Hiedi Sisler,Business,3.149263709123936
+177,Donald Mckinney,Art History,3.115447382089699
+178,Lamar Menges,Chemistry,2.780094757854773
+179,Alfredo Madden,Business,3.6646488733965716
+180,Tanesha Wiley,Business,2.3803783350232077
+181,Jaunita Presswood,CS,3.7457808001514845
+182,Henry Porco,Art History,1.1531257653658091
+183,Richard Lindholm,Biology,2.0002739640402067
+184,Roxanne Masek,CS,2.3149818175767782
+185,Helene Macleod,CS,2.5925009947479047
+186,Elizabet Trowell,Biology,2.906090426924333
+187,Kasi Chesney,Zoology,1.107816161048091
+188,Carlita Holmon,Art History,1.9484717368141058
+189,Salome Newport,Chemistry,1.7454779935250886
+190,Azucena Galles,Business,1.2519184085958166
+191,Kizzie Cliff,Business,3.913792929559814
+192,Gregg Ahlgren,Business,1.690390383587132
+193,Carolin Keels,CS,2.9916220069580395
+194,Catalina Echavarria,Zoology,3.3984181844218915
+195,Denice Pothier,Chemistry,3.388576246359147
+196,Shauna Dutta,Zoology,2.2527986472805157
+197,Marisela Cue,Business,2.0716201591707373
+198,Hannelore Goya,Art History,1.647341862916107
+199,Ozella Backstrom,Chemistry,3.3695989272830484
+200,Meggan Gasser,Business,1.568863708664711

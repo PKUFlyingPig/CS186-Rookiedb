@@ -1,0 +1,332 @@
+options{
+    IGNORE_CASE = true ;
+    STATIC = false;
+    DEBUG_PARSER = false;
+    DEBUG_LOOKAHEAD = false;
+    DEBUG_TOKEN_MANAGER = false;
+    MULTI = true;
+    VISITOR = true;
+    NODE_DEFAULT_VOID=true;
+    JDK_VERSION="1.11";
+    OUTPUT_DIRECTORY="src/main/java/edu/berkeley/cs186/database/cli/parser";
+    JJTREE_OUTPUT_DIRECTORY="src/main/java/edu/berkeley/cs186/database/cli/parser";
+    VISITOR_RETURN_TYPE="void";
+}
+
+
+PARSER_BEGIN(RookieParser)
+package edu.berkeley.cs186.database.cli.parser;
+
+@SuppressWarnings("all")
+public class RookieParser {
+
+}
+
+PARSER_END(RookieParser)
+
+/** Ignore whitespace **/
+SKIP :
+{
+        " "
+    |   "\t"
+    |   "\r"
+    |   "\n"
+}
+
+/* Reserved tokens */
+TOKEN:
+{
+        <SCOL: ";">
+    |   <DOT: ".">
+    |   <OPEN_PAR: "(">
+    |   <CLOSE_PAR: ")">
+    |   <COMMA: ",">
+    |   <STAR: "*">
+    |   <LT: "<">
+    |   <LT_EQ: "<=">
+    |   <GT: ">">
+    |   <GT_EQ: ">=">
+    |   <EQEQ: "==">
+    |   <EQ: "=">
+    |   <NOT_EQ1: "!=">
+    |   <NOT_EQ2: "<>">
+    |   <FALSE: "false">
+    |   <TRUE: "true">
+}
+
+/* Keywords */
+TOKEN:
+{
+        <K_WITH: "with">
+    |   <K_AS: "as">
+    |   <K_DELETE: "delete">
+    |   <K_INSERT: "insert">
+    |   <K_INTO: "into">
+    |   <K_UPDATE: "update">
+    |   <K_SET: "set">
+    |   <K_SELECT: "select">
+    |   <K_FROM: "from">
+    |   <K_INNER: "inner">
+    |   <K_JOIN: "join">
+    |   <K_ON: "on">
+    |   <K_WHERE: "where">
+    |   <K_AND: "and">
+    |   <K_GROUP: "group">
+    |   <K_BY: "by">
+    |   <K_LIMIT: "limit">
+    |   <K_CREATE: "create">
+    |   <K_DROP: "drop">
+    |   <K_TABLE: "table">
+    |   <K_VALUES: "values">
+    |   <K_INDEX: "index">
+    |   <K_BEGIN: "begin">
+    |   <K_END: "end">
+    |   <K_COMMIT: "commit">
+    |   <K_TRANSACTION: "transaction">
+    |   <K_SAVEPOINT: "savepoint">
+    |   <K_ROLLBACK: "rollback">
+    |   <K_TO: "to">
+    |   <K_RELEASE: "release">
+    |   <K_EXPLAIN: "explain">
+    |   <K_QUERY: "query">
+    |   <K_PLAN: "plan">
+    |   <K_ANALYZE: "analyze">
+}
+
+
+/* Literals and Identifier: 186, .186, 186.186, "186", etc... */
+TOKEN: {
+    <NUMERIC_LITERAL:
+        (<SIGN>)? <DIGITS> ("." (<DIGIT>)*)? ( "E" (<SIGN>)? <DIGITS>)?
+        |  "." <DIGITS> ("E" (<SIGN>)? <DIGITS>)?>
+    | <#DIGITS: ( <DIGIT> )+ >
+    | <#DIGIT: ["0" - "9"] >
+    | <#SIGN: ["+", "-"]>
+    | <STRING_LITERAL: ("'" ( ~["'"] | "''" )* "'") >
+    | <IDENTIFIER: ["A"-"Z","_"] (["A"-"Z","0"-"9","_"])*
+                | "\"" (~["\n","\r","\""] | "\"\"")+ "\""
+                | ("`"  (~["\n","\r","`"]  | "``")+   "`")
+                | ("["  (~["\n","\r","]"])+           "]") >
+}
+
+ASTSQLStatementList sql_stmt_list() #SQLStatementList:
+{}
+{
+    (<SCOL>)* sql_stmt() (LOOKAHEAD(2) (<SCOL>)+ sql_stmt())* (<SCOL>)+ {return jjtThis;}
+}
+
+void sql_stmt():
+{}
+{
+        select_stmt()
+    |   LOOKAHEAD(2) create_table_stmt()
+    |   create_index_stmt()
+    |   LOOKAHEAD(2) drop_table_stmt()
+    |   drop_index_stmt()
+    |   insert_stmt()
+    |   delete_stmt()
+    |   begin_stmt()
+    |   commit_stmt()
+    |   rollback_stmt()
+    |   savepoint_stmt()
+    |   release_stmt()
+    |   explain_stmt()
+}
+
+void explain_stmt() #ExplainStatement:
+{}
+{
+    <K_EXPLAIN> select_stmt()
+}
+
+void drop_table_stmt() #DropTableStatement:
+{}
+{
+    <K_DROP> <K_TABLE> table_name()
+}
+
+void drop_index_stmt() #DropIndexStatement:
+{}
+{
+    <K_DROP> <K_INDEX> table_name() <OPEN_PAR> column_name() <CLOSE_PAR>
+}
+
+void release_stmt() #ReleaseStatement:
+{}
+{
+    <K_RELEASE> (<K_SAVEPOINT>)? identifier()
+}
+
+void savepoint_stmt() #SavepointStatement:
+{}
+{
+    <K_SAVEPOINT> identifier()
+}
+
+void rollback_stmt() #RollbackStatement:
+{}
+{
+    <K_ROLLBACK> (<K_TRANSACTION>)? (<K_TO> (<K_SAVEPOINT>)? identifier())?
+}
+
+void begin_stmt() #BeginStatement:
+{}
+{
+    <K_BEGIN> (<K_TRANSACTION>)?
+}
+
+void commit_stmt() #CommitStatement:
+{}
+{
+    (<K_COMMIT> | <K_END>) (<K_TRANSACTION>)?
+}
+
+
+void insert_stmt() #InsertStatement:
+{}
+{
+    <K_INSERT> <K_INTO> table_name()
+    <K_VALUES> <OPEN_PAR> literal() (<COMMA> literal())* <CLOSE_PAR>
+}
+
+void select_stmt() #SelectStatement:
+{}
+{
+    select_clause()
+    from_clause()
+    (<K_WHERE>  binary_expression() (<K_AND> binary_expression())?)?
+    (<K_GROUP> <K_BY> column_name() (<COMMA> column_name())*)?
+    (<K_LIMIT> limit())?
+}
+
+void delete_stmt() #DeleteStatement:
+{}
+{
+    <K_DELETE> <K_FROM> table_name() <K_WHERE> binary_expression()
+}
+
+void create_table_stmt() #CreateTableStatement:
+{}
+{
+    <K_CREATE> <K_TABLE> table_name() <OPEN_PAR> column_def() (<COMMA> column_def())* <CLOSE_PAR>
+}
+
+void create_index_stmt() #CreateIndexStatement:
+{}
+{
+    <K_CREATE> <K_INDEX> <K_ON> table_name() <OPEN_PAR> column_name() <CLOSE_PAR>
+}
+
+void column_def() #ColumnDef:
+{
+    Object[] components = {null, null, null};
+}
+{
+    components[0]=identifier()
+    components[1]=identifier()
+    (<OPEN_PAR>
+        components[2]=<NUMERIC_LITERAL>
+    <CLOSE_PAR>)?
+    {
+        jjtThis.value = components;
+    }
+}
+
+void select_clause() #SelectClause:
+{}
+{
+    <K_SELECT> result_column_name() (<COMMA> result_column_name())*
+}
+
+void limit() #Limit :
+{Token t;}
+{
+    t=<NUMERIC_LITERAL> {jjtThis.value = t.image;}
+}
+
+//TODO: aliasing
+//TODO: temporary tables
+void from_clause() #FromClause:
+{}
+{
+     <K_FROM> aliased_table_name() (joined_table())*
+}
+
+void joined_table() #JoinedTable:
+{ASTColumnName[] columns = {null, null};}
+{
+    (<K_INNER>)? <K_JOIN> aliased_table_name() <K_ON> columns[0]=column_name() (<EQ> | <EQEQ>) columns[1]=column_name()
+    {
+        jjtThis.value = columns;
+    }
+}
+
+void result_column_name() #ResultColumnName:
+{Token t1; Token t2 = null;}
+{
+        <STAR> {jjtThis.value = "*";}
+    |   LOOKAHEAD(2) t1=<IDENTIFIER> <OPEN_PAR> (t2=<IDENTIFIER> | t2=<STAR>) <CLOSE_PAR> {jjtThis.value = t1.image + "(" + t2.image + ")";}
+    |   t1=<IDENTIFIER> (<DOT> (t2=<IDENTIFIER> | t2=<STAR>))? {jjtThis.value = t2 != null ? t1.image + "." + t2.image : t1.image;}
+}
+
+ASTColumnName column_name() #ColumnName:
+{Token t1; Token t2=null;}
+{
+    t1=<IDENTIFIER> (<DOT> t2=<IDENTIFIER>)? {
+        jjtThis.value = t2 != null ? t1.image + "." + t2.image : t1.image;
+        return jjtThis;
+    }
+}
+
+String table_name() #TableName:
+{Token t;}
+{
+    t=<IDENTIFIER> {
+        jjtThis.value = t.image;
+        return t.image;
+    }
+}
+
+String identifier() #Identifier():
+{Token t;}
+{
+    t=<IDENTIFIER> {
+        jjtThis.value = t.image;
+        return t.image;
+    }
+}
+
+void aliased_table_name() #AliasedTableName:
+{String[] names = {null, null};}
+{
+    names[0]=table_name() (<K_AS> names[1]=table_name())? {jjtThis.value = names;}
+}
+
+void binary_expression() #BinaryExpression:
+{Object[] components = {null, null, null}; jjtThis.value = components;}
+{
+        (components[0]=column_name() components[1]=binary_operator() components[2]=literal())
+    |   (components[0]=literal() components[1]=binary_operator() components[2]=column_name())
+}
+
+String literal() #Literal:
+{Token t;}
+{
+        t=<STRING_LITERAL> {jjtThis.value = t.image; return t.image;}
+    |   t=<NUMERIC_LITERAL> {jjtThis.value = t.image; return t.image;}
+    |   t=<TRUE> {jjtThis.value = t.image; return t.image;}
+    |   t=<FALSE> {jjtThis.value = t.image; return t.image;}
+}
+
+String binary_operator():
+{Token t;}
+{
+        t=<EQ> {return t.image;}
+    |   t=<EQEQ> {return t.image;}
+    |   t=<NOT_EQ1> {return t.image;}
+    |   t=<NOT_EQ2> {return t.image;}
+    |   t=<LT_EQ> {return t.image;}
+    |   t=<LT> {return t.image;}
+    |   t=<GT_EQ> {return t.image;}
+    |   t=<GT> {return t.image;}
+}
