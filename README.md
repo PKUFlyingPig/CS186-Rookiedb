@@ -15,7 +15,7 @@ following locations:
 |-----------------------------------------------------------------------------------------------|---------------------|
 | [Project 0: Setup](https://cs186.gitbook.io/project/assignments/proj0)                        | Tuesday, 1/19/2021  |
 | [Project 1: SQL](https://cs186.gitbook.io/project/assignments/proj1)                          | Thursday, 1/21/2021 |
-| [Project 2: B+ Trees](https://cs186.gitbook.io/project/assignments/proj2)                     | Tuesday, 2/4/2020   |
+| [Project 2: B+ Trees](https://cs186.gitbook.io/project/assignments/proj2)                     | Thursday, 2/4/2021   |
 | [Project 3: Joins and Query Optimization](https://cs186.gitbook.io/project/assignments/proj3) | Tuesday, 2/23/2021  |
 | [Project 4: Concurrency](https://cs186.gitbook.io/project/assignments/proj4)                  | Tuesday, 3/16/2021  |
 | [Project 5: Recovery](https://cs186.gitbook.io/project/assignments/proj5)                     | Saturday, 4/10/2021 |
