@@ -154,6 +154,10 @@ abstract class BPlusNode {
      * fillFactor should ONLY be used for determining how full leaf nodes are
      * (not inner nodes), and calculations should round up, i.e. with d=5
      * and fillFactor=0.75, leaf nodes should be 8/10 full.
+     *
+     * You can assume that 0 < fillFactor <= 1 for testing purposes, and that
+     * a fill factor outside of that range will result in undefined behavior
+     * (you're free to handle those cases however you like).
      */
     public abstract Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
             float fillFactor);

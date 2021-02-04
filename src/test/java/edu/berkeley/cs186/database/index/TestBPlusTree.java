@@ -60,6 +60,9 @@ public class TestBPlusTree {
 
     @After
     public void cleanup() {
+        // If you run into errors with this line, try commenting it out and
+        // seeing if any other errors appear which may be preventing
+        // certain pages from being unpinned correctly.
         this.bufferManager.close();
     }
 
