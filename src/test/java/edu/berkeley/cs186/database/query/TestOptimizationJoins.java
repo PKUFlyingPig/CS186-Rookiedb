@@ -3,11 +3,13 @@ package edu.berkeley.cs186.database.query;
 import edu.berkeley.cs186.database.*;
 import edu.berkeley.cs186.database.categories.*;
 import edu.berkeley.cs186.database.common.PredicateOperator;
+import edu.berkeley.cs186.database.query.join.BNLJOperator;
 import org.junit.*;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.util.*;
 
 import edu.berkeley.cs186.database.table.Schema;
 import edu.berkeley.cs186.database.table.Record;
@@ -20,8 +22,7 @@ import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 @Category({Proj3Tests.class, Proj3Part2Tests.class})
 public class TestOptimizationJoins {
@@ -63,6 +64,95 @@ public class TestOptimizationJoins {
             t.dropAllTables();
         }
         this.db.close();
+    }
+
+    @Test
+    @Category(PublicTests.class)
+    public void testMinCostJoins() {
+        try (Transaction transaction = db.beginTransaction()) {
+            for (int i = 0; i < 500; ++i) {
+                Record r = new Record(false, i, "!", 0.0f);
+                transaction.insert("table1", r);
+            }
+
+            for (int i = 0; i < 1500; ++i) {
+                Record r = new Record(false, i, "!", 0.0f);
+                transaction.insert("table2", r);
+            }
+
+            for (int i = 0; i < 2700; ++i) {
+                Record r = new Record(false, i, "!", 0.0f);
+                transaction.insert("table3", r);
+            }
+
+            transaction.getTransactionContext().getTable("table1").buildStatistics(10);
+            transaction.getTransactionContext().getTable("table2").buildStatistics(10);
+            transaction.getTransactionContext().getTable("table3").buildStatistics(10);
+
+            // SELECT * FROM table1
+            //     INNER JOIN table2 ON table1.int = table2.int
+            //     INNER JOIN table3 ON table2.int = table3.int
+            // table1 is 2 pages
+            // table2 is 4 pages
+            // table3 is 7 pages
+            QueryPlan query = transaction.query("table1");
+            query.join("table2", "table1.int", "table2.int");
+            query.join("table3", "table2.int", "table3.int");
+
+            // Create Pass 1 Map for the three tables
+            String[] tables = {"table1", "table2", "table3"};
+            Map<Set<String>, QueryOperator> pass1Map = new HashMap<>();
+            for (int i = 0; i < tables.length; i++) {
+                String name = tables[i];
+                pass1Map.put(Collections.singleton(name), query.minCostSingleAccess(name));
+            }
+
+            // Run one pass. After this pass the following joins should be considered:
+            // - {table1, table2}
+            // - {table2, table3}
+            Map<Set<String>, QueryOperator> pass2Map = query.minCostJoins(pass1Map, pass1Map);
+            assertEquals(2, pass2Map.size());
+            Set<String> set12 = new HashSet<>();
+            set12.add("table1");
+            set12.add("table2");
+            assertTrue(pass2Map.containsKey(set12));
+
+            Set<String> set23 = new HashSet<>();
+            set23.add("table2");
+            set23.add("table3");
+            assertTrue(pass2Map.containsKey(set23));
+
+            // The following joins should have been considered for 1 and 2
+            // (table2 BNLJ table1), cost=8
+            // (table1 BNLJ table2), cost=6
+            QueryOperator op12 = pass2Map.get(set12);
+            assertTrue(op12 instanceof BNLJOperator);
+            assertEquals(6, op12.estimateIOCost());
+
+            // The following joins should have been considered for 2 and 3
+            // (table3 BNLJ table2), cost=19
+            // (table2 BNLJ table3), cost=18
+            QueryOperator op23 = pass2Map.get(set23);
+            assertTrue(op23 instanceof  BNLJOperator);
+            assertEquals(18, op23.estimateIOCost());
+
+            // Runs another pass
+            Map<Set<String>, QueryOperator> pass3Map = query.minCostJoins(pass2Map, pass1Map);
+            assertEquals(1, pass3Map.size());
+            Set<String> set123 = new HashSet<>();
+            set123.add("table2");
+            set123.add("table3");
+            set123.add("table1");
+            assertTrue(pass3Map.containsKey(set123));
+
+            // The following joins should have been considered:
+            // - ((table1 BNLJ table2) BNLJ table3), cost=13
+            // - ((table2 BNLJ table3) BNLJ table1), cost=24
+
+            QueryOperator op123 = pass3Map.get(set123);
+            assertTrue(op123 instanceof BNLJOperator);
+            assertEquals(13, op123.estimateIOCost());
+        }
     }
 
     @Test
@@ -137,7 +227,7 @@ public class TestOptimizationJoins {
             query.execute();
             QueryOperator finalOperator = query.getFinalOperator();
             assertTrue(finalOperator.toString().contains("Index Scan"));
-            assertTrue(finalOperator.toString().contains("SNLJ"));
+            assertTrue(finalOperator.toString().contains("SNLJ") || finalOperator.toString().contains("BNLJ"));
         }
     }
 
@@ -145,17 +235,17 @@ public class TestOptimizationJoins {
     @Category(PublicTests.class)
     public void testJoinOrderA() {
         try(Transaction transaction = db.beginTransaction()) {
-            for (int i = 0; i < 10; ++i) {
+            for (int i = 0; i < 500; ++i) {
                 Record r = new Record(false, i, "!", 0.0f);
                 transaction.insert("table1", r);
             }
 
-            for (int i = 0; i < 100; ++i) {
+            for (int i = 0; i < 1500; ++i) {
                 Record r = new Record(false, i, "!", 0.0f);
                 transaction.insert("table2", r);
             }
 
-            for (int i = 0; i < 2000; ++i) {
+            for (int i = 0; i < 2700; ++i) {
                 Record r = new Record(false, i, "!", 0.0f);
                 transaction.insert("table3", r);
             }
@@ -174,9 +264,9 @@ public class TestOptimizationJoins {
             query.execute();
 
             QueryOperator finalOperator = query.getFinalOperator();
-            //inner most joins are the largest tables
+            //inner most joins are the smaller tables
+            assertTrue(finalOperator.toString().contains("\t\t-> Seq Scan on table1"));
             assertTrue(finalOperator.toString().contains("\t\t-> Seq Scan on table2"));
-            assertTrue(finalOperator.toString().contains("\t\t-> Seq Scan on table3"));
         }
     }
 

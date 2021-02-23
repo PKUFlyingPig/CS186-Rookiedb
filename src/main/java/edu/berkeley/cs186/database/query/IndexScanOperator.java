@@ -41,9 +41,7 @@ class IndexScanOperator extends QueryOperator {
         this.predicate = predicate;
         this.value = value;
         this.setOutputSchema(this.computeSchema());
-        columnName = this.checkSchemaForColumn(this.getSchema(), columnName);
-        this.columnIndex = this.getSchema().getFieldNames().indexOf(columnName);
-
+        this.columnIndex = this.getSchema().findField(columnName);
         this.stats = this.estimateStats();
     }
 

@@ -40,8 +40,8 @@ public abstract class JoinOperator extends QueryOperator {
     private TransactionContext transaction;
 
     /**
-     * Create a join operator that pulls tuples from leftSource and rightSource. Returns tuples for which
-     * leftColumnName and rightColumnName are equal.
+     * Create a join operator that pulls tuples from leftSource and rightSource.
+     * Returns tuples for which leftColumnName and rightColumnName are equal.
      *
      * @param leftSource the left source operator
      * @param rightSource the right source operator
@@ -75,20 +75,14 @@ public abstract class JoinOperator extends QueryOperator {
         // Get lists of the field names of the records
         Schema leftSchema = this.leftSource.getSchema();
         Schema rightSchema = this.rightSource.getSchema();
-        List<String> leftSchemaNames = new ArrayList<>(leftSchema.getFieldNames());
-        List<String> rightSchemaNames = new ArrayList<>(rightSchema.getFieldNames());
 
         // Set up join column attributes
-        this.leftColumnName = this.checkSchemaForColumn(leftSchema, this.leftColumnName);
-        this.leftColumnIndex = leftSchemaNames.indexOf(leftColumnName);
-        this.rightColumnName = this.checkSchemaForColumn(rightSchema, this.rightColumnName);
-        this.rightColumnIndex = rightSchemaNames.indexOf(rightColumnName);
+        this.leftColumnIndex = leftSchema.findField(this.leftColumnName);
+        this.rightColumnIndex = rightSchema.findField(this.rightColumnName);
 
         // Check that the types of the columns of each input operator match
-        List<Type> leftSchemaTypes = new ArrayList<>(leftSchema.getFieldTypes());
-        List<Type> rightSchemaTypes = new ArrayList<>(rightSchema.getFieldTypes());
-        if (!leftSchemaTypes.get(this.leftColumnIndex).getClass().equals(rightSchemaTypes.get(
-                this.rightColumnIndex).getClass())) {
+        if (!leftSchema.getFieldType(this.leftColumnIndex).getTypeId().equals(
+                rightSchema.getFieldType(this.rightColumnIndex).getTypeId())) {
             throw new RuntimeException("Mismatched types of columns " + leftColumnName + " and "
                     + rightColumnName + ".");
         }
@@ -166,16 +160,18 @@ public abstract class JoinOperator extends QueryOperator {
     }
 
     /**
-     * @return the position of the column being joined on in the left relation's schema. Can be used to determine which
-     * value in the left relation's records to check for equality on.
+     * @return the position of the column being joined on in the left relation's
+     * schema. Can be used to determine which value in the left relation's records
+     * to check for equality on.
      */
     public int getLeftColumnIndex() {
         return this.leftColumnIndex;
     }
 
     /**
-     * @return the position of the column being joined on in the right relation's schema. Can be used to determine which
-     * value in the right relation's records to check for equality on.
+     * @return the position of the column being joined on in the right relation's
+     * schema. Can be used to determine which value in the right relation's records
+     * to check for equality on.
      */
     public int getRightColumnIndex() {
         return this.rightColumnIndex;
@@ -184,8 +180,9 @@ public abstract class JoinOperator extends QueryOperator {
     // Helpers /////////////////////////////////////////////////////////////////
 
     /**
-     * @return 0 if leftRecord and rightRecord match on their join values, -1 if leftRecord's join value is less
-     * than rightRecord's join value, 1 if leftRecord's join value is greater than rightRecord's join value.
+     * @return 0 if leftRecord and rightRecord match on their join values, -1 if
+     * leftRecord's join value is less than rightRecord's join value, 1 if
+     * leftRecord's join value is greater than rightRecord's join value.
      */
     public int compare(Record leftRecord, Record rightRecord) {
         DataBox leftRecordValue = leftRecord.getValue(this.leftColumnIndex);

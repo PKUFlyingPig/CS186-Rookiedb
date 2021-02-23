@@ -100,7 +100,8 @@ public class QueryPlan {
             for (String fieldName: s.getFieldNames()) {
                 if (fieldName.equals(column)) {
                     if (result != null) throw new RuntimeException(
-                            "Ambiguous column name `" + column + "`");
+                            "Ambiguous column name `" + column + " found in both `" +
+                            result + "` and `" + tableName + "`.");
                     result = tableName;
                 }
             }
@@ -112,7 +113,8 @@ public class QueryPlan {
 
     @Override
     public String toString() {
-        // Comically large toString() function
+        // Comically large toString() function. Formats the QueryPlan attributes
+        // into SQL query format.
         StringBuilder result = new StringBuilder();
         // SELECT clause
         if (this.projectColumns.size() == 0) result.append("SELECT *");
@@ -189,12 +191,15 @@ public class QueryPlan {
         String leftColumn;
         String rightTable;
         String rightColumn;
-        String joinTable;
+        private String joinTable; // Just for formatting purposes
 
         JoinPredicate(String tableName, String leftColumn, String rightColumn) {
-            // Note: columns passed in are expected to be of the format
-            // tableName.columnName. The splitting logic below just separates
-            // the column name from the table name.
+            if (!leftColumn.contains(".") || !rightColumn.contains(".")) {
+                throw new IllegalArgumentException("Join columns must be fully qualified");
+            }
+
+            // The splitting logic below just separates the column name from the
+            // table name.
             this.joinTable = tableName;
             this.leftTable = leftColumn.split("\\.")[0];
             this.leftColumn = leftColumn;
@@ -419,17 +424,19 @@ public class QueryPlan {
      * - sets the final operator to the join
      */
     private void addJoinsNaive() {
+        int pos = 1;
         for (JoinPredicate predicate : joinPredicates) {
             this.finalOperator = new SNLJOperator(
                     finalOperator,
                     new SequentialScanOperator(
                             this.transaction,
-                            predicate.joinTable
+                            tableNames.get(pos)
                     ),
                     predicate.leftColumn,
                     predicate.rightColumn,
                     this.transaction
             );
+            pos++;
         }
     }
 
@@ -474,9 +481,7 @@ public class QueryPlan {
             if (i == except) continue;
             SelectPredicate curr = this.selectPredicates.get(i);
             try {
-                String colName = source.checkSchemaForColumn(
-                        source.getSchema(), curr.tableName + "." + curr.column
-                );
+                String colName = source.getSchema().matchFieldName(curr.tableName + "." + curr.column);
                 source = new SelectOperator(
                         source, colName, curr.operator, curr.value
                 );
@@ -500,7 +505,8 @@ public class QueryPlan {
      *
      * @return a QueryOperator that has the lowest cost of scanning the given
      * table which is either a SequentialScanOperator or an IndexScanOperator
-     * nested within any possible pushed down select operators
+     * nested within any possible pushed down select operators. Ties for the
+     * minimum cost operator can be broken arbitrarily.
      */
     public QueryOperator minCostSingleAccess(String table) {
         QueryOperator minOp = new SequentialScanOperator(this.transaction, table);
@@ -513,7 +519,11 @@ public class QueryPlan {
 
     /**
      * Given a join predicate between left and right operators, finds the lowest
-     * cost join operator out of all join types in JoinOperator.JoinType.
+     * cost join operator out of join types in JoinOperator.JoinType. By default
+     * only considers SNLJ and BNLJ to prevent dependencies on GHJ, Sort and SMJ.
+     *
+     * Reminder: Your implementation does not need to consider cartesian products
+     * and does not need to keep track of interesting orders.
      *
      * @return lowest cost join QueryOperator between the input operators
      */
@@ -558,19 +568,19 @@ public class QueryPlan {
         // TODO(proj3_part2): implement
         // We provide a basic description of the logic you have to implement:
         // For each set of tables in prevMap
-        //   For each join predicate listed in the query
-        //      Get the left side and the right side (table name and column)
+        //   For each join predicate listed in this.joinPredicates
+        //      Get the left side and the right side of the predicate (table name and column)
         //
-        //      Case 1: Set contains left table but not right, use pass1Map to
-        //              fetch an operator to access the rightTable
-        //      Case 2: Set contains right table but not left, use pass1Map to
-        //              fetch an operator to access the leftTable.
-        //      Case 3: Set contains neither or both the left table or right
-        //              table, continue the loop
+        //      Case 1: The set contains left table but not right, use pass1Map
+        //              to fetch an operator to access the rightTable
+        //      Case 2: The set contains right table but not left, use pass1Map
+        //              to fetch an operator to access the leftTable.
+        //      Case 3: Otherwise, skip this join predicate and continue the loop.
         //
         //      Using the operator from Case 1 or 2, use minCostJoinType to
-        //      calculate the cheapest join with the new table and the
-        //      previously joined tables. Then, update the result map if needed.
+        //      calculate the cheapest join with the new table (the one you
+        //      fetched an operator for from pass1Map) and the previously joined
+        //      tables. Then, update the result map if needed.
         return result;
     }
 

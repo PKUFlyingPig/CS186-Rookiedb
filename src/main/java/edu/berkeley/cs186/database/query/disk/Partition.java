@@ -12,7 +12,8 @@ import java.util.List;
 /**
  * A partition represents a section of space on disk that we can append records
  * to or read from. This is useful for external hashing to store records we
- * aren't using and free up memory.
+ * aren't using and free up memory. Automatically buffers reads and writes to
+ * minimize I/Os incurred.
  */
 public class Partition implements Iterable<Record> {
     // The transaction this partition will be used within
@@ -27,6 +28,7 @@ public class Partition implements Iterable<Record> {
 
     /**
      * Adds a record to this partition.
+     *
      * @param record the record to add
      */
     public void add(Record record) {
@@ -35,10 +37,11 @@ public class Partition implements Iterable<Record> {
 
     /**
      * Adds a list of records to this partition.
+     *
      * @param records the records to add
      */
     public void addAll(List<Record> records) {
-        for (Record record: records) this.add(record);
+        for (Record record : records) this.add(record);
     }
 
     /**
@@ -61,14 +64,5 @@ public class Partition implements Iterable<Record> {
      */
     public int getNumPages() {
         return this.transaction.getNumDataPages(this.tempTableName);
-    }
-
-    /**
-     * @return true if every record in this partition is equal on the hash
-     * column. The default partition implementation is naive and always returns
-     * false. Implement the full functionality in SmartPartition.
-     */
-    public boolean isUniform() {
-        return false;
     }
 }

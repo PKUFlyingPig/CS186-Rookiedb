@@ -212,8 +212,7 @@ public class TestGraceHashJoin {
                     new TestSourceOperator(leftRecords, schema),
                     new TestSourceOperator(rightRecords, schema),
                     "int", "int",
-                    transaction.getTransactionContext(),
-                    false // Use naive partitions
+                    transaction.getTransactionContext()
             );
 
             try {
@@ -226,7 +225,7 @@ public class TestGraceHashJoin {
     }
 
     /**
-     * Tests student input such that GHJ breaks!
+     * Tests student input such that GHJ breaks when using regular partitions.
      */
     @Test
     @Category(PublicTests.class)
@@ -244,8 +243,7 @@ public class TestGraceHashJoin {
                 new TestSourceOperator(leftRecords, schema),
                 new TestSourceOperator(rightRecords, schema),
                 "int", "int",
-                transaction.getTransactionContext(),
-                false // Use naive partitions
+                transaction.getTransactionContext()
             );
 
             try {
@@ -258,4 +256,5 @@ public class TestGraceHashJoin {
             }
         }
     }
+
 }

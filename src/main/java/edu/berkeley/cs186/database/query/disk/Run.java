@@ -12,7 +12,8 @@ import java.util.List;
 /**
  * A run represents a section of space on disk that we can append records to or
  * read from. This is useful for external sorting to store records while we
- * aren't using them and free up memory.
+ * aren't using them and free up memory. Automatically buffers reads and writes
+ * to minimize I/Os incurred.
  */
 public class Run implements Iterable<Record> {
     // The transaction this run will be used within

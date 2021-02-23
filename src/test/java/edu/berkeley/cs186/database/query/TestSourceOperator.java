@@ -14,6 +14,7 @@ import edu.berkeley.cs186.database.table.stats.TableStats;
 
 public class TestSourceOperator extends QueryOperator {
     private List<Record> records;
+    private String sortedOn;
 
     public TestSourceOperator(List<Record> records, Schema schema) {
         super(OperatorType.SEQ_SCAN);
@@ -39,6 +40,16 @@ public class TestSourceOperator extends QueryOperator {
         // We initialize ourselves with OperatorType SEQSCAN, but we technically
         // shouldn't be treated identically as one.
         return false;
+    }
+
+    public void setSortedOn(String s) {
+        this.sortedOn = s;
+    }
+
+    @Override
+    public List<String> sortedBy() {
+        if (this.sortedOn == null) return Collections.emptyList();
+        return Collections.singletonList(this.sortedOn);
     }
 
     @Override

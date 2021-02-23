@@ -31,11 +31,8 @@ public class SNLJOperator extends JoinOperator {
     @Override
     public int estimateIOCost() {
         int numLeftRecords = getLeftSource().estimateStats().getNumRecords();
-
         int numRightPages = getRightSource().estimateStats().getNumPages();
-        int numLeftPages = getLeftSource().estimateStats().getNumPages();
-
-        return numLeftRecords * numRightPages + numLeftPages;
+        return numLeftRecords * numRightPages + getLeftSource().estimateIOCost();
     }
 
     /**
@@ -84,7 +81,7 @@ public class SNLJOperator extends JoinOperator {
                     this.leftRecord = leftRecordIterator.next();
                     this.rightRecordIterator.reset();
                 } else {
-                    // f you're here then there are no more records to fetch
+                    // if you're here then there are no more records to fetch
                     return null;
                 }
             }

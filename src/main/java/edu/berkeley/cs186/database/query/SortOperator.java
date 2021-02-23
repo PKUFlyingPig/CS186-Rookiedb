@@ -23,9 +23,8 @@ public class SortOperator extends QueryOperator {
         super(OperatorType.SORT, source);
         this.transaction = transaction;
         this.numBuffers = this.transaction.getWorkMemSize();
-
-        this.sortColumnName = checkSchemaForColumn(getSchema(), columnName);
-        this.sortColumnIndex = getSchema().getFieldNames().indexOf(this.sortColumnName);
+        this.sortColumnIndex = getSchema().findField(columnName);
+        this.sortColumnName = getSchema().getFieldName(this.sortColumnIndex);
         this.comparator = new RecordComparator();
     }
 
@@ -101,11 +100,13 @@ public class SortOperator extends QueryOperator {
      * priority queue at a given moment. It is recommended that your Priority
      * Queue hold Pair<Record, Integer> objects where a Pair (r, i) is the
      * Record r with the smallest value you are sorting on currently unmerged
-     * from run i.
+     * from run i. `i` can be useful to locate which record to add to the queue
+     * next after the smallest element is removed.
      *
      * @return a single sorted run obtained by merging the input runs
      */
     public Run mergeSortedRuns(List<Run> runs) {
+        assert (runs.size() <= this.numBuffers - 1);
         // TODO(proj3_part1): implement
         return null;
     }
@@ -144,7 +145,7 @@ public class SortOperator extends QueryOperator {
      * sorted order.
      */
     public Run sort() {
-        // Iterator over the pages of the table we want to sort
+        // Iterator over the records of the relation we want to sort
         Iterator<Record> sourceIterator = getSource().iterator();
 
         // TODO(proj3_part1): implement

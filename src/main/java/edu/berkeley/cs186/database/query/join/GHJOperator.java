@@ -8,7 +8,6 @@ import edu.berkeley.cs186.database.databox.*;
 import edu.berkeley.cs186.database.query.*;
 import edu.berkeley.cs186.database.query.disk.Partition;
 import edu.berkeley.cs186.database.query.disk.Run;
-import edu.berkeley.cs186.database.query.disk.SmartPartition;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
 
@@ -16,35 +15,24 @@ import java.util.*;
 
 public class GHJOperator extends JoinOperator {
     private int numBuffers;
-    private boolean useSmartPartition;
     private Run joinedRecords;
 
     public GHJOperator(QueryOperator leftSource,
                        QueryOperator rightSource,
                        String leftColumnName,
                        String rightColumnName,
-                       TransactionContext transaction,
-                       boolean useSmartPartition) {
+                       TransactionContext transaction) {
         super(leftSource, rightSource, leftColumnName, rightColumnName, transaction, JoinType.GHJ);
         this.numBuffers = transaction.getWorkMemSize();
         this.stats = this.estimateStats();
         this.joinedRecords = null;
-        this.useSmartPartition = useSmartPartition;
-    }
-
-    public GHJOperator(QueryOperator leftSource,
-                       QueryOperator rightSource,
-                       String leftColumnName,
-                       String rightColumnName,
-                       TransactionContext transaction) {
-        this(leftSource, rightSource, leftColumnName, rightColumnName, transaction, true);
     }
 
     @Override
     public int estimateIOCost() {
-        int leftPages = getLeftSource().estimateStats().getNumPages();
-        int rightPages = getRightSource().estimateStats().getNumPages();
-        return 2 * (leftPages + rightPages);
+        // Since this has a chance of failing on certain inputs we give it the
+        // maximum possible cost to encourage the optimizer to avoid it
+        return Integer.MAX_VALUE;
     }
 
     @Override
@@ -147,9 +135,7 @@ public class GHJOperator extends JoinOperator {
         for (int i = 0; i < leftPartitions.length; i++) {
             // TODO(proj3_part1): implement the rest of grace hash join
             // If you meet the conditions to run the build and probe you should
-            // do so immediately. If you don't meet the conditions and can't
-            // further divide the partitions, find an alternative way to join
-            // them together. Otherwise you should make a recursive call.
+            // do so immediately. Otherwise you should make a recursive call.
         }
     }
 
@@ -180,11 +166,6 @@ public class GHJOperator extends JoinOperator {
     private Partition createPartition(boolean left) {
         Schema schema = getRightSource().getSchema();
         if (left) schema = getLeftSource().getSchema();
-        if (this.useSmartPartition) {
-            int hashColumnIndex = getRightColumnIndex();
-            if (left) hashColumnIndex = getLeftColumnIndex();
-            return new SmartPartition(getTransaction(), schema, hashColumnIndex);
-        }
         return new Partition(getTransaction(), schema);
     }
 

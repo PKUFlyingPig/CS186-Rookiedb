@@ -30,7 +30,7 @@ public class SortMergeOperator extends JoinOperator {
     private static QueryOperator prepareLeft(TransactionContext transaction,
                                              QueryOperator leftSource,
                                              String leftColumn) {
-        leftColumn = checkSchemaForColumn(leftSource.getSchema(), leftColumn);
+        leftColumn = leftSource.getSchema().matchFieldName(leftColumn);
         if (leftSource.sortedBy().contains(leftColumn)) return leftSource;
         return new SortOperator(transaction, leftSource, leftColumn);
     }
@@ -45,7 +45,7 @@ public class SortMergeOperator extends JoinOperator {
     private static QueryOperator prepareRight(TransactionContext transaction,
                                               QueryOperator rightSource,
                                               String rightColumn) {
-        rightColumn = checkSchemaForColumn(rightSource.getSchema(), rightColumn);
+        rightColumn = rightSource.getSchema().matchFieldName(rightColumn);
         if (!rightSource.sortedBy().contains(rightColumn)) {
             return new SortOperator(transaction, rightSource, rightColumn);
         } else if (!rightSource.materialized()) {
@@ -107,50 +107,35 @@ public class SortMergeOperator extends JoinOperator {
             }
 
             this.marked = false;
-
-            try {
-                fetchNextRecord();
-            } catch (NoSuchElementException e) {
-                this.nextRecord = null;
-            }
         }
 
         /**
-         * Checks if there are more record(s) to yield
-         *
-         * @return true if this iterator has another record to yield, otherwise false
+         * @return true if this iterator has another record to yield, otherwise
+         * false
          */
         @Override
         public boolean hasNext() {
-            return nextRecord != null;
+            if (this.nextRecord == null) this.nextRecord = fetchNextRecord();
+            return this.nextRecord != null;
         }
 
         /**
-         * Yields the next record of this iterator.
-         *
-         * @return the next Record
-         * @throws NoSuchElementException if there are no more Records to yield
+         * @return the next record from this iterator
+         * @throws NoSuchElementException if there are no more records to yield
          */
         @Override
         public Record next() {
             if (!this.hasNext()) throw new NoSuchElementException();
             Record nextRecord = this.nextRecord;
-            try {
-                this.fetchNextRecord();
-            } catch (NoSuchElementException e) {
-                this.nextRecord = null;
-            }
+            this.nextRecord = null;
             return nextRecord;
         }
 
         /**
-         * Fetches the next record to return, and sets nextRecord to it. If
-         * there are no more records to return, a NoSuchElementException should
-         * be thrown.
-         *
-         * @throws NoSuchElementException if there are no more records to yield
+         * Returns the next record that should be yielded from this join,
+         * or null if there are no more records to join.
          */
-        private void fetchNextRecord() {
+        private Record fetchNextRecord() {
             // TODO(proj3_part1): implement
         }
 

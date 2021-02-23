@@ -159,6 +159,11 @@ public abstract class QueryOperator implements Iterable<Record> {
         return false;
     }
 
+    /**
+     * @throws UnsupportedOperationException if this operator doesn't support
+     * backtracking
+     * @return A backtracking iterator over the records of this operator
+     */
     public BacktrackingIterator<Record> backtrackingIterator() {
         throw new UnsupportedOperationException(
             "This operator doesn't support backtracking. You may want to " +
@@ -167,56 +172,10 @@ public abstract class QueryOperator implements Iterable<Record> {
     }
 
     /**
-     * Utility method that checks to see if a column is found in a schema using
-     * dot notation.
      *
-     * @param fromSchema the schema to search in
-     * @param specified the column name to search for
-     * @return
-     */
-    public static boolean checkColumnNameEquality(String fromSchema, String specified) {
-        if (fromSchema.equals(specified)) {
-            return true;
-        }
-        if (!specified.contains(".")) {
-            String schemaColName = fromSchema;
-            if (fromSchema.contains(".")) {
-                String[] splits = fromSchema.split("\\.");
-                schemaColName = splits[1];
-            }
-
-            return schemaColName.equals(specified);
-        }
-        return false;
-    }
-
-    /**
-     * Utility method to determine whether or not a specified column name is
-     * valid with a given schema.
-     *
-     * @param schema
-     * @param columnName
-     */
-    public static String checkSchemaForColumn(Schema schema, String columnName) {
-        List<String> schemaColumnNames = schema.getFieldNames();
-        boolean found = false;
-        String foundName = null;
-        for (String sourceColumnName : schemaColumnNames) {
-            if (checkColumnNameEquality(sourceColumnName, columnName)) {
-                if (found) {
-                    throw new RuntimeException("Column " + columnName + " specified twice without disambiguation.");
-                }
-                found = true;
-                foundName = sourceColumnName;
-            }
-        }
-        if (!found) {
-            throw new RuntimeException("No column " + columnName + " found.");
-        }
-        return foundName;
-    }
-
-    /**
+     * @param records an iterator of records
+     * @param schema the schema of the records yielded from `records`
+     * @param maxPages the maximum number of pages worth of records to consume
      * @return This method will consume up to `maxPages` pages of records from
      * `records` (advancing it in the process) and return a backtracking
      * iterator over those records.
@@ -231,6 +190,12 @@ public abstract class QueryOperator implements Iterable<Record> {
         return new ArrayBacktrackingIterator<>(blockRecords);
     }
 
+    /**
+     * @param operator a query operator to materialize
+     * @param transaction the transaction the materialized table will be created
+     *                    within
+     * @return A new MaterializedOperator that draws from the records of `operator`
+     */
     public static QueryOperator materialize(QueryOperator operator, TransactionContext transaction) {
         if (!operator.materialized()) {
             return new MaterializeOperator(operator, transaction);

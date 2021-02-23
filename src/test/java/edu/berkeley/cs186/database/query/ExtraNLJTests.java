@@ -3,6 +3,7 @@ package edu.berkeley.cs186.database.query;
 import edu.berkeley.cs186.database.Database;
 import edu.berkeley.cs186.database.TimeoutScaling;
 import edu.berkeley.cs186.database.Transaction;
+import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.DummyLockContext;
 import edu.berkeley.cs186.database.databox.*;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
@@ -29,11 +30,11 @@ import static org.junit.Assert.assertEquals;
 
 /**
  * These are extra tests that *won't be graded*, but should help pinpoint bugs in
- * the tests in TestNLJOperator with excessively detailed output when something
+ * the tests in TestNestedLoopJoins with excessively detailed output when something
  * messes up.
  */
 public class ExtraNLJTests {
-    // All of those tests use 4 records per page. This record size forces the
+    // All of these tests use 4 records per page. This record size forces the
     // tables to have 4 records per page. See the calculation in
     // Table#computeNumRecordsPerPage for more details.
     private static final int RECORD_SIZE = 800;
@@ -67,6 +68,61 @@ public class ExtraNLJTests {
     @Rule
     public TestRule globalTimeout = new DisableOnDebug(Timeout.millis((long) (
             3000 * TimeoutScaling.factor)));
+
+    public Pair<NLJVisualizer, List<Record>> setupValues(Transaction transaction, int[] leftVals, int[] rightVals, boolean blockjoin) {
+        List<Record> leftRecords = new ArrayList<>();
+        List<Record> rightRecords = new ArrayList<>();
+
+        transaction.createTable(getSchema(), "leftTable");
+        transaction.createTable(getSchema(), "rightTable");
+        for (int i = 0; i < leftVals.length; i++) {
+            Record leftRecord = new Record("left", i/4 + 1, (i % 4) + 1, leftVals[i]);
+            leftRecords.add(leftRecord);
+            transaction.insert("leftTable", leftRecord);
+        }
+        for (int i = 0; i < rightVals.length; i++) {
+            Record rightRecord = new Record("left", i/4 + 1, (i % 4) + 1, rightVals[i]);
+            rightRecords.add(rightRecord);
+            transaction.insert("rightTable", rightRecord);
+        }
+
+        List<Record> expectedRecords = new ArrayList<>();
+        if (blockjoin) {
+            for (int rp = 0; rp < rightRecords.size() / 4; rp++) {
+                for (int l = 0; l < leftRecords.size(); l++) {
+                    for (int r = 0; r < 4; r++) {
+                        Record leftRecord = leftRecords.get(l);
+                        Record rightRecord = rightRecords.get(rp*4 + r);
+                        if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
+                            expectedRecords.add(leftRecord.concat(rightRecord));
+                        }
+                    }
+                }
+            }
+        } else {
+            for (int lp = 0; lp < leftRecords.size() / 4; lp++) {
+                for (int rp = 0; rp < rightRecords.size() / 4; rp++) {
+                    for (int l = 0; l < 4; l++) {
+                        for (int r = 0; r < 4; r++) {
+                            Record leftRecord = leftRecords.get(lp*4 + l);
+                            Record rightRecord = rightRecords.get(rp*4 + r);
+                            if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
+                                expectedRecords.add(leftRecord.concat(rightRecord));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        NLJVisualizer viz = new NLJVisualizer(
+                leftVals.length / 4, rightVals.length / 4, leftRecords, rightRecords, expectedRecords
+        );
+        setSourceOperators(
+                new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
+                new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
+        );
+        return new Pair(viz, expectedRecords);
+    }
 
     @Test
     public void test1x1PNLJFull() {
@@ -107,50 +163,19 @@ public class ExtraNLJTests {
         // (x's represent where we expect to see matches)
 
         try(Transaction transaction = d.beginTransaction()) {
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(5);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-            for (int i = 0; i < 4; i++) {
-                Record leftRecord = getStringIntIntIntRecord("left", 1, i+1, 0, 5);
-                Record rightRecord = getStringIntIntIntRecord("right", 1, i+1, 0, 5);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int l = 0; l < 4; l++) {
-                for (int r = 0; r < 4; r++) {
-                    Record leftRecord = leftRecords.get(l);
-                    Record rightRecord = rightRecords.get(r);
-                    if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                        expectedRecords.add(leftRecord.concat(rightRecord));
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    1, 1, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            d.setWorkMem(5); // B=5
+            int[] leftVals = {0, 0, 0, 0};
+            int[] rightVals = {0, 0, 0, 0};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, false);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new PNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
             checkIOs(0);
-
             Iterator<Record> outputIterator = joinOperator.iterator();
             checkIOs(2);
-
             for (int i = 0; i < expectedRecords.size() && outputIterator.hasNext(); i++) {
                 viz.add(expectedRecords.get(i), outputIterator.next(), i);
             }
@@ -209,44 +234,13 @@ public class ExtraNLJTests {
         // (x's represent where we expect to see matches)
 
         try(Transaction transaction = d.beginTransaction()) {
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(5);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            ArrayList<Record> leftRecords = new ArrayList<Record>();
-            ArrayList<Record> rightRecords = new ArrayList<Record>();
-            for (int i = 0; i < 4; i++) {
-                int jValue = 1;
-                if (i >= 2) jValue = 2;
-                Record leftRecord = getStringIntIntIntRecord("left", 1, i+1, jValue, 5);
-                Record rightRecord = getStringIntIntIntRecord("right", 1, i+1, jValue, 5);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int l = 0; l < 4; l++) {
-                for (int r = 0; r < 4; r++) {
-                    Record leftRecord = leftRecords.get(l);
-                    Record rightRecord = rightRecords.get(r);
-                    if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                        expectedRecords.add(leftRecord.concat(rightRecord));
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    1, 1, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            d.setWorkMem(5); // B=5
+            int[] leftVals = {1, 1, 2, 2};
+            int[] rightVals = {1, 1, 2, 2};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, false);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new PNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -314,44 +308,12 @@ public class ExtraNLJTests {
 
         try(Transaction transaction = d.beginTransaction()) {
             d.setWorkMem(5); // B=5
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(5);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            ArrayList<Record> leftRecords = new ArrayList<Record>();
-            ArrayList<Record> rightRecords = new ArrayList<Record>();
-            for (int i = 0; i < 4; i++) {
-                int jValue = 1;
-                if (i >= 2) jValue = 2;
-                Record leftRecord = getStringIntIntIntRecord("left", 1, i+1, jValue, 5);
-                Record rightRecord = getStringIntIntIntRecord("right", 1, i+1, 3-jValue, 5);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int l = 0; l < 4; l++) {
-                for (int r = 0; r < 4; r++) {
-                    Record leftRecord = leftRecords.get(l);
-                    Record rightRecord = rightRecords.get(r);
-                    if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                        expectedRecords.add(leftRecord.concat(rightRecord));
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    1, 1, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            int[] leftVals = {1, 1, 2, 2};
+            int[] rightVals = {2, 2, 1, 1};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, false);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new PNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -415,56 +377,20 @@ public class ExtraNLJTests {
         // #1    0 | x x x x | x x x x |
         //       0 | x x x x | x x x x |
         //         +---------+---------+
-        //           0 0 0 0    0 0 0 0  
-        //           Right      Right    
-        //           Page #1    Page #2  
+        //           0 0 0 0    0 0 0 0
+        //           Right      Right
+        //           Page #1    Page #2
         //
         // (x's represent where we expect to see matches)
 
         try(Transaction transaction = d.beginTransaction()) {
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(RECORD_SIZE);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                int jValue = 0;
-                int page = (i / 4) + 1;
-                int rNum = i % 4;
-                Record leftRecord = getStringIntIntIntRecord("left", page, rNum+1, jValue, RECORD_SIZE);
-                Record rightRecord = getStringIntIntIntRecord("right", page, rNum+1, jValue, RECORD_SIZE);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int lp = 0; lp < 2; lp++) {
-                for (int rp = 0; rp < 2; rp++) {
-                    for (int l = 0; l < 4; l++) {
-                        for (int r = 0; r < 4; r++) {
-                            Record leftRecord = leftRecords.get(lp*4+l);
-                            Record rightRecord = rightRecords.get(rp*4+r);
-                            if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                                expectedRecords.add(leftRecord.concat(rightRecord));
-                            }
-                        }
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    2, 2, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            d.setWorkMem(5); // B=5
+            int[] leftVals = {0, 0, 0, 0, 0, 0, 0, 0};
+            int[] rightVals = {0, 0, 0, 0, 0, 0, 0, 0};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, false);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new PNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -534,49 +460,13 @@ public class ExtraNLJTests {
         // (x's represent where we expect to see matches)
 
         try(Transaction transaction = d.beginTransaction()) {
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(RECORD_SIZE);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                int jValue = i / 4 + 1;
-                int page = (i / 4) + 1;
-                int rNum = i % 4;
-                Record leftRecord = getStringIntIntIntRecord("left", page, rNum+1, jValue, RECORD_SIZE);
-                Record rightRecord = getStringIntIntIntRecord("right", page, rNum+1, jValue, RECORD_SIZE);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int lp = 0; lp < 2; lp++) {
-                for (int rp = 0; rp < 2; rp++) {
-                    for (int l = 0; l < 4; l++) {
-                        for (int r = 0; r < 4; r++) {
-                            Record leftRecord = leftRecords.get(lp*4+l);
-                            Record rightRecord = rightRecords.get(rp*4+r);
-                            if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                                expectedRecords.add(leftRecord.concat(rightRecord));
-                            }
-                        }
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    2, 2, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            d.setWorkMem(5); // B=5
+            int[] leftVals = {1, 1, 1, 1, 2, 2, 2, 2};
+            int[] rightVals = {1, 1, 1, 1, 2, 2, 2, 2};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, false);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new PNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -657,49 +547,13 @@ public class ExtraNLJTests {
         // (x's represent where we expect to see matches)
 
         try(Transaction transaction = d.beginTransaction()) {
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(RECORD_SIZE);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                int jValue = i / 4 + 1;
-                int page = (i / 4) + 1;
-                int rNum = i % 4;
-                Record leftRecord = getStringIntIntIntRecord("left", page, rNum+1, jValue, RECORD_SIZE);
-                Record rightRecord = getStringIntIntIntRecord("right", page, rNum+1, 3-jValue, RECORD_SIZE);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int lp = 0; lp < 2; lp++) {
-                for (int rp = 0; rp < 2; rp++) {
-                    for (int l = 0; l < 4; l++) {
-                        for (int r = 0; r < 4; r++) {
-                            Record leftRecord = leftRecords.get(lp*4+l);
-                            Record rightRecord = rightRecords.get(rp*4+r);
-                            if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                                expectedRecords.add(leftRecord.concat(rightRecord));
-                            }
-                        }
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    2, 2, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            d.setWorkMem(5); // B=5
+            int[] leftVals = {1, 1, 1, 1, 2, 2, 2, 2};
+            int[] rightVals = {2, 2, 2, 2, 1, 1, 1, 1};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, false);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new PNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -775,58 +629,18 @@ public class ExtraNLJTests {
         //         +---------+---------+
         //           1 1 2 2    2 2 1 1
         //           Right      Right
-        //           Page #1    Page #2  
+        //           Page #1    Page #2
         //
         // (x's represent where we expect to see matches)
 
         try(Transaction transaction = d.beginTransaction()) {
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(RECORD_SIZE);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                int jValue = 1;
-                if (i >= 2 && i <= 5) {
-                    jValue = 2;
-                }
-                int page = (i / 4) + 1;
-                int rNum = i % 4;
-
-                Record leftRecord = getStringIntIntIntRecord("left", page, rNum+1, jValue, RECORD_SIZE);
-                Record rightRecord = getStringIntIntIntRecord("right", page, rNum+1, jValue, RECORD_SIZE);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int lp = 0; lp < 2; lp++) {
-                for (int rp = 0; rp < 2; rp++) {
-                    for (int l = 0; l < 4; l++) {
-                        for (int r = 0; r < 4; r++) {
-                            Record leftRecord = leftRecords.get(lp*4+l);
-                            Record rightRecord = rightRecords.get(rp*4+r);
-                            if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                                expectedRecords.add(leftRecord.concat(rightRecord));
-                            }
-                        }
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    2, 2, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            d.setWorkMem(5); // B=5
+            int[] leftVals = {1, 1, 2, 2, 2, 2, 1, 1};
+            int[] rightVals = {1, 1, 2, 2, 2, 2, 1, 1};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, false);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new PNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -902,57 +716,18 @@ public class ExtraNLJTests {
         //         +---------+---------+
         //           2 2 1 1    1 1 2 2
         //           Right      Right
-        //           Page #1    Page #2  
+        //           Page #1    Page #2
         //
         // (x's represent where we expect to see matches)
 
         try(Transaction transaction = d.beginTransaction()) {
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(RECORD_SIZE);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                int jValue = 1;
-                if (i >= 2 && i <= 5) {
-                    jValue = 2;
-                }
-                int page = (i / 4) + 1;
-                int rNum = i % 4;
-                Record leftRecord = getStringIntIntIntRecord("left", page, rNum+1, jValue, RECORD_SIZE);
-                Record rightRecord = getStringIntIntIntRecord("right", page, rNum+1, 3-jValue, RECORD_SIZE);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int lp = 0; lp < 2; lp++) {
-                for (int rp = 0; rp < 2; rp++) {
-                    for (int l = 0; l < 4; l++) {
-                        for (int r = 0; r < 4; r++) {
-                            Record leftRecord = leftRecords.get(lp*4+l);
-                            Record rightRecord = rightRecords.get(rp*4+r);
-                            if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                                expectedRecords.add(leftRecord.concat(rightRecord));
-                            }
-                        }
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    2, 2, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            d.setWorkMem(5); // B=5
+            int[] leftVals = {1, 1, 2, 2, 2, 2, 1, 1};
+            int[] rightVals = {2, 2, 1, 1, 1, 1, 2, 2};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, false);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new PNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -1024,47 +799,12 @@ public class ExtraNLJTests {
 
         try(Transaction transaction = d.beginTransaction()) {
             d.setWorkMem(4); // B=4
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(RECORD_SIZE);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                int jValue = 0;
-                int page = (i / 4) + 1;
-                int rNum = i % 4;
-                Record leftRecord = getStringIntIntIntRecord("left", page, rNum+1, jValue, RECORD_SIZE);
-                Record rightRecord = getStringIntIntIntRecord("right", page, rNum+1, jValue, RECORD_SIZE);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-                for (int rp = 0; rp < 2; rp++) {
-                    for (int l = 0; l < 8; l++) {
-                        for (int r = 0; r < 4; r++) {
-                            Record leftRecord = leftRecords.get(l);
-                            Record rightRecord = rightRecords.get(rp*4+r);
-                            if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                                expectedRecords.add(leftRecord.concat(rightRecord));
-                            }
-                        }
-                    }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    2, 2, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            int[] leftVals = {0, 0, 0, 0, 0, 0, 0, 0};
+            int[] rightVals = {0, 0, 0, 0, 0, 0, 0, 0};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, true);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new BNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -1135,48 +875,12 @@ public class ExtraNLJTests {
 
         try(Transaction transaction = d.beginTransaction()) {
             d.setWorkMem(4); // B=4
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(RECORD_SIZE);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                int jValue = i / 4 + 1;
-                int page = (i / 4) + 1;
-                int rNum = i % 4;
-
-                Record leftRecord = getStringIntIntIntRecord("left", page, rNum+1, jValue, RECORD_SIZE);
-                Record rightRecord = getStringIntIntIntRecord("right", page, rNum+1, jValue, RECORD_SIZE);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int rp = 0; rp < 2; rp++) {
-                for (int l = 0; l < 8; l++) {
-                    for (int r = 0; r < 4; r++) {
-                        Record leftRecord = leftRecords.get(l);
-                        Record rightRecord = rightRecords.get(rp*4+r);
-                        if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                            expectedRecords.add(leftRecord.concat(rightRecord));
-                        }
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    2, 2, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            int[] leftVals = {1, 1, 1, 1, 2, 2, 2, 2};
+            int[] rightVals = {1, 1, 1, 1, 2, 2, 2, 2};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, true);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new BNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -1258,47 +962,12 @@ public class ExtraNLJTests {
 
         try(Transaction transaction = d.beginTransaction()) {
             d.setWorkMem(4); // B=4
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(RECORD_SIZE);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                int jValue = i / 4 + 1;
-                int page = (i / 4) + 1;
-                int rNum = i % 4;
-                Record leftRecord = getStringIntIntIntRecord("left", page, rNum+1, jValue, RECORD_SIZE);
-                Record rightRecord = getStringIntIntIntRecord("right", page, rNum+1, 3-jValue, RECORD_SIZE);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int rp = 0; rp < 2; rp++) {
-                for (int l = 0; l < 8; l++) {
-                    for (int r = 0; r < 4; r++) {
-                        Record leftRecord = leftRecords.get(l);
-                        Record rightRecord = rightRecords.get(rp*4+r);
-                        if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                            expectedRecords.add(leftRecord.concat(rightRecord));
-                        }
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    2, 2, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            int[] leftVals = {1, 1, 1, 1, 2, 2, 2, 2};
+            int[] rightVals = {2, 2, 2, 2, 1, 1, 1, 1};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, true);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new BNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -1380,50 +1049,12 @@ public class ExtraNLJTests {
 
         try(Transaction transaction = d.beginTransaction()) {
             d.setWorkMem(4); // B=4
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(RECORD_SIZE);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                int jValue = 1;
-                if (i >= 2 && i <= 5) {
-                    jValue = 2;
-                }
-                int page = (i / 4) + 1;
-                int rNum = i % 4;
-                Record leftRecord = getStringIntIntIntRecord("left", page, rNum+1, jValue, RECORD_SIZE);
-                Record rightRecord = getStringIntIntIntRecord("right", page, rNum+1, jValue, RECORD_SIZE);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int rp = 0; rp < 2; rp++) {
-                for (int l = 0; l < 8; l++) {
-                    for (int r = 0; r < 4; r++) {
-                        Record leftRecord = leftRecords.get(l);
-                        Record rightRecord = rightRecords.get(rp*4+r);
-                        if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                            expectedRecords.add(leftRecord.concat(rightRecord));
-                        }
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    2, 2, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            int[] leftVals = {1, 1, 2, 2, 2, 2, 1, 1};
+            int[] rightVals = {1, 1, 2, 2, 2, 2, 1, 1};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, true);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new BNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -1504,52 +1135,13 @@ public class ExtraNLJTests {
         // (x's represent where we expect to see matches)
 
         try(Transaction transaction = d.beginTransaction()) {
-            // This whole section is just to generate the tables described above
-            Schema schema = getStringIntIntIntSchema(RECORD_SIZE);
-            transaction.createTable(schema, "leftTable");
-            transaction.createTable(schema, "rightTable");
-            List<Record> leftRecords = new ArrayList<>();
-            List<Record> rightRecords = new ArrayList<>();
-
-            for (int i = 0; i < 8; i++) {
-                int jValue = 1;
-                if (i >= 2 && i <= 5) {
-                    jValue = 2;
-                }
-                int page = (i / 4) + 1;
-                int rNum = i % 4;
-
-                Record leftRecord = getStringIntIntIntRecord("left", page, rNum+1, jValue, RECORD_SIZE);
-                Record rightRecord = getStringIntIntIntRecord("right", page, rNum+1, 3-jValue, RECORD_SIZE);
-                transaction.insert("leftTable", leftRecord);
-                transaction.insert("rightTable", rightRecord);
-                leftRecords.add(leftRecord);
-                rightRecords.add(rightRecord);
-            }
-
-            List<Record> expectedRecords = new ArrayList<>();
-            for (int rp = 0; rp < 2; rp++) {
-                for (int l = 0; l < 8; l++) {
-                    for (int r = 0; r < 4; r++) {
-                        Record leftRecord = leftRecords.get(l);
-                        Record rightRecord = rightRecords.get(rp*4+r);
-                        if (leftRecord.getValue(3).equals(rightRecord.getValue(3))) {
-                            expectedRecords.add(leftRecord.concat(rightRecord));
-                        }
-                    }
-                }
-            }
-            OutputVisualizer viz = new OutputVisualizer(
-                    2, 2, leftRecords, rightRecords, expectedRecords
-            );
-
-            setSourceOperators(
-                    new SequentialScanOperator(transaction.getTransactionContext(), "leftTable"),
-                    new SequentialScanOperator(transaction.getTransactionContext(), "rightTable")
-            );
-
+            d.setWorkMem(4); // B=4
+            int[] leftVals = {1, 1, 2, 2, 2, 2, 1, 1};
+            int[] rightVals = {2, 2, 1, 1, 1, 1, 2, 2};
+            Pair<NLJVisualizer, List<Record>> p = setupValues(transaction, leftVals, rightVals, true);
+            NLJVisualizer viz = p.getFirst();
+            List<Record> expectedRecords = p.getSecond();
             startCountIOs();
-
             // Constructing the operator should incur 0 IOs
             QueryOperator joinOperator = new BNLJOperator(leftSourceOperator, rightSourceOperator, "joinValue", "joinValue",
                     transaction.getTransactionContext());
@@ -1580,7 +1172,7 @@ public class ExtraNLJTests {
     }
 
     // ur debugging bff
-    public class OutputVisualizer {
+    public class NLJVisualizer {
         private int leftPages;
         private int rightPages;
         private String grid;
@@ -1591,7 +1183,7 @@ public class ExtraNLJTests {
         private String[][] firstMismatch;
         private String[][] fullRun;
 
-        public OutputVisualizer(int leftPages, int rightPages, List<Record> leftRecords, List<Record> rightRecords, List<Record> expectedOutput) {
+        public NLJVisualizer(int leftPages, int rightPages, List<Record> leftRecords, List<Record> rightRecords, List<Record> expectedOutput) {
             this.mismatchedNum = -1;
             this.leftPages = leftPages;
             this.rightPages = rightPages;
@@ -1815,13 +1407,6 @@ public class ExtraNLJTests {
         numIOs = newIOs;
     }
 
-    private void checkIOs(String message, long numIOs) {
-        checkIOs(message, numIOs, numIOs);
-    }
-
-    private void checkIOs(long minIOs, long maxIOs) {
-        checkIOs(null, minIOs, maxIOs);
-    }
     private void checkIOs(long numIOs) {
         checkIOs(null, numIOs, numIOs);
     }
@@ -1866,20 +1451,11 @@ public class ExtraNLJTests {
         pinPage(4, 0); // right source header page
     }
 
-    public Schema getStringIntIntIntSchema(int size) {
+    public Schema getSchema() {
         return new Schema()
-                .add("table", Type.stringType(size))
+                .add("table", Type.stringType(RECORD_SIZE))
                 .add("pageNum", Type.intType())
                 .add("recordNum", Type.intType())
                 .add("joinValue", Type.intType());
-    }
-
-    public Record getStringIntIntIntRecord(String s, int i1, int i2, int i3, int RECORD_SIZE) {
-        List<DataBox> values = new ArrayList<>();
-        values.add(new StringDataBox(s, RECORD_SIZE));
-        values.add(new IntDataBox(i1));
-        values.add(new IntDataBox(i2));
-        values.add(new IntDataBox(i3));
-        return new Record(values);
     }
 }

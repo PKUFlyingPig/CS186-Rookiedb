@@ -37,9 +37,9 @@ public class BNLJOperator extends JoinOperator {
         //This method implements the IO cost estimation of the Block Nested Loop Join
         int usableBuffers = numBuffers - 2;
         int numLeftPages = getLeftSource().estimateStats().getNumPages();
-        int numRightPages = getRightSource().estimateStats().getNumPages();
+        int numRightPages = getRightSource().estimateIOCost();
         return ((int) Math.ceil((double) numLeftPages / (double) usableBuffers)) * numRightPages +
-               numLeftPages;
+               getLeftSource().estimateIOCost();
     }
 
     /**

@@ -32,8 +32,8 @@ public class SelectOperator extends QueryOperator {
         this.operator = operator;
         this.value = value;
 
-        this.columnName = this.checkSchemaForColumn(source.getSchema(), columnName);
-        this.columnIndex = this.getSchema().getFieldNames().indexOf(this.columnName);
+        this.columnIndex = this.getSchema().findField(columnName);
+        this.columnName = this.getSchema().getFieldName(columnIndex);
 
         this.stats = this.estimateStats();
     }

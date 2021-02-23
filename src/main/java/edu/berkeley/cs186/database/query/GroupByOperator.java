@@ -30,7 +30,7 @@ class GroupByOperator extends QueryOperator {
         this.groupByColumns = new ArrayList<>();
         this.groupByColumnIndices = new ArrayList<>();
         for (String column: columns) {
-            this.groupByColumns.add(this.checkSchemaForColumn(sourceSchema, column));
+            this.groupByColumns.add(sourceSchema.matchFieldName(column));
         }
         for (String groupByColumn: this.groupByColumns) {
             this.groupByColumnIndices.add(sourceSchema.getFieldNames().indexOf(groupByColumn));
@@ -124,7 +124,7 @@ class GroupByOperator extends QueryOperator {
         }
 
         /**
-         * @return the next record this iterator
+         * @return the next record
          * @throws NoSuchElementException if there are no more records to yield
          */
         @Override

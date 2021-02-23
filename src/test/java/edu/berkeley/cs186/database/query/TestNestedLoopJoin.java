@@ -77,6 +77,10 @@ public class TestNestedLoopJoin {
         numIOs = newIOs;
     }
 
+    private void checkIOs(long minIOs, long maxIOs) {
+        checkIOs(null, minIOs, maxIOs);
+    }
+
     private void checkIOs(String message, long numIOs) {
         checkIOs(message, numIOs, numIOs);
     }
@@ -163,10 +167,57 @@ public class TestNestedLoopJoin {
     @Test
     @Category(SystemTests.class)
     public void testNonEmptyWithEmptySNLJ() {
+        // Joins a non-empty table with an empty table. Expected behavior is
+        // that iterator is created without error, and hasNext() immediately
+        // returns false.
         d.setWorkMem(4); // B=4
         try(Transaction transaction = d.beginTransaction()) {
             setSourceOperators(
                     TestUtils.createSourceWithAllTypes(100),
+                    TestUtils.createSourceWithInts(Collections.emptyList()),
+                    transaction
+            );
+            startCountIOs();
+            JoinOperator joinOperator = new SNLJOperator(leftSourceOperator, rightSourceOperator,
+                    "int", "int", transaction.getTransactionContext());
+            checkIOs(0);
+            Iterator<Record> outputIterator = joinOperator.iterator();
+            assertFalse("too many records", outputIterator.hasNext());
+        }
+    }
+
+    @Test
+    @Category(SystemTests.class)
+    public void testEmptyWithNonEmptySNLJ() {
+        // Joins an empty table with a non-empty table. Expected behavior is
+        // that iterator is created without error, and hasNext() immediately
+        // returns false.
+        d.setWorkMem(4); // B=4
+        try(Transaction transaction = d.beginTransaction()) {
+            setSourceOperators(
+                    TestUtils.createSourceWithInts(Collections.emptyList()),
+                    TestUtils.createSourceWithAllTypes(100),
+                    transaction
+            );
+            startCountIOs();
+            JoinOperator joinOperator = new SNLJOperator(leftSourceOperator, rightSourceOperator,
+                    "int", "int", transaction.getTransactionContext());
+            checkIOs(0);
+            Iterator<Record> outputIterator = joinOperator.iterator();
+            assertFalse("too many records", outputIterator.hasNext());
+        }
+    }
+
+    @Test
+    @Category(SystemTests.class)
+    public void testEmptyWithEmptySNLJ() {
+        // Joins a empty table with an empty table. Expected behavior is
+        // that iterator is created without error, and hasNext() immediately
+        // returns false.
+        d.setWorkMem(4); // B=4
+        try(Transaction transaction = d.beginTransaction()) {
+            setSourceOperators(
+                    TestUtils.createSourceWithInts(Collections.emptyList()),
                     TestUtils.createSourceWithInts(Collections.emptyList()),
                     transaction
             );
@@ -176,18 +227,7 @@ public class TestNestedLoopJoin {
             JoinOperator joinOperator = new SNLJOperator(leftSourceOperator, rightSourceOperator,
                     "int", "int", transaction.getTransactionContext());
             checkIOs(0);
-
             Iterator<Record> outputIterator = joinOperator.iterator();
-            checkIOs(1);
-
-            try {
-                outputIterator.next();
-                fail();
-            } catch (NoSuchElementException e) {
-                /* do nothing */
-            }
-            checkIOs(0);
-
             assertFalse("too many records", outputIterator.hasNext());
         }
     }

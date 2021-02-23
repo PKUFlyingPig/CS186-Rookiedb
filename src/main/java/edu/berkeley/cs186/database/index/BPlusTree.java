@@ -365,10 +365,12 @@ public class BPlusTree {
 
         // Running command to convert dot file to PDF
         try {
-            Runtime.getRuntime().exec("dot -T pdf tree.dot -o " + filename);
+            Runtime.getRuntime().exec("dot -T pdf tree.dot -o " + filename).waitFor();
         } catch (IOException e) {
             e.printStackTrace();
             throw new UncheckedIOException(e);
+        } catch (InterruptedException e) {
+            throw new BPlusTreeException(e.getMessage());
         }
     }
 

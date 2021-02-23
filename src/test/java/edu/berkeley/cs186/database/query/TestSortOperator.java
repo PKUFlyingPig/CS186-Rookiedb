@@ -31,9 +31,9 @@ public class TestSortOperator {
     private Page metadataHeader;
     private long numIOs;
 
-    // 1 I/O on first access to a table after evictAll
+    // 1 extra I/O on first access to a table after evictAll
     public static long FIRST_ACCESS_IOS = 1;
-    // 2 I/Os to create a run, 1 for metadata and 1 to create a header page
+    // 2 extra I/Os to create a run, 1 for metadata and 1 to create a header page
     public static long NEW_RUN_IOS = 2;
 
     @Rule

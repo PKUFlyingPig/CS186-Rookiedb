@@ -69,8 +69,7 @@ public class ProjectOperator extends QueryOperator {
      * @return index in the source schema of the given column name
      */
     private int getSourceIndex(String columnName) {
-        columnName = this.checkSchemaForColumn(sourceSchema, columnName);
-        return this.sourceSchema.getFieldNames().indexOf(columnName);
+        return this.sourceSchema.findField(columnName);
     }
 
     /**
