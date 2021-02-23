@@ -172,13 +172,13 @@ public abstract class QueryOperator implements Iterable<Record> {
     }
 
     /**
-     *
      * @param records an iterator of records
      * @param schema the schema of the records yielded from `records`
      * @param maxPages the maximum number of pages worth of records to consume
      * @return This method will consume up to `maxPages` pages of records from
      * `records` (advancing it in the process) and return a backtracking
-     * iterator over those records.
+     * iterator over those records. Setting maxPages to 1 will result in an
+     * iterator over a single page of records.
      */
     public static BacktrackingIterator<Record> getBlockIterator(Iterator<Record> records, Schema schema, int maxPages) {
         int recordsPerPage = Table.computeNumRecordsPerPage(PageDirectory.EFFECTIVE_PAGE_SIZE, schema);

@@ -81,6 +81,8 @@ public class BNLJOperator extends JoinOperator {
          *
          * If there are no more records in the left source, this method should
          * do nothing.
+         *
+         * You may find QueryOperator#getBlockIterator useful here.
          */
         private void fetchNextLeftBlock() {
             // TODO(proj3_part1): implement
@@ -94,6 +96,8 @@ public class BNLJOperator extends JoinOperator {
          *
          * If there are no more records in the right source, this method should
          * do nothing.
+         *
+         * You may find QueryOperator#getBlockIterator useful here.
          */
         private void fetchNextRightPage() {
             // TODO(proj3_part1): implement
@@ -102,6 +106,10 @@ public class BNLJOperator extends JoinOperator {
         /**
          * Returns the next record that should be yielded from this join,
          * or null if there are no more records to join.
+         *
+         * You may find JoinOperator#compare useful here. (You can call compare
+         * function directly from this file, since BNLJOperator is a subclass
+         * of JoinOperator).
          */
         private Record fetchNextRecord() {
             // TODO(proj3_part1): implement
