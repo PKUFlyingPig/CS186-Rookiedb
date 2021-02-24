@@ -137,6 +137,7 @@ public class SortMergeOperator extends JoinOperator {
          */
         private Record fetchNextRecord() {
             // TODO(proj3_part1): implement
+            return null;
         }
 
         @Override
