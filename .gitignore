@@ -23,4 +23,5 @@ target/*
 
 # ignore submission files
 hw*.zip
+*.zip
 demo/*

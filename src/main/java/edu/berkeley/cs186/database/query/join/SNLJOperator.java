@@ -41,22 +41,22 @@ public class SNLJOperator extends JoinOperator {
      * "inner" loop.
      */
     private class SNLJIterator implements Iterator<Record> {
-        // Iterator over pages of the left relation
-        private Iterator<Record> leftRecordIterator;
-        // Iterator over pages of the right relation
-        private BacktrackingIterator<Record> rightRecordIterator;
-        // The current record on the left page
+        // Iterator over all the records of the left relation
+        private Iterator<Record> leftSourceIterator;
+        // Iterator over all the records of the right relation
+        private BacktrackingIterator<Record> rightSourceIterator;
+        // The current record from the left relation
         private Record leftRecord;
         // The next record to return
         private Record nextRecord;
 
         public SNLJIterator() {
             super();
-            this.leftRecordIterator = getLeftSource().iterator();
-            if (leftRecordIterator.hasNext()) leftRecord = leftRecordIterator.next();
+            this.leftSourceIterator = getLeftSource().iterator();
+            if (leftSourceIterator.hasNext()) leftRecord = leftSourceIterator.next();
 
-            this.rightRecordIterator = getRightSource().backtrackingIterator();
-            this.rightRecordIterator.markNext();
+            this.rightSourceIterator = getRightSource().backtrackingIterator();
+            this.rightSourceIterator.markNext();
         }
 
         /**
@@ -69,17 +69,17 @@ public class SNLJOperator extends JoinOperator {
                 return null;
             }
             while(true) {
-                if (this.rightRecordIterator.hasNext()) {
+                if (this.rightSourceIterator.hasNext()) {
                     // there's a next right record, join it if there's a match
-                    Record rightRecord = rightRecordIterator.next();
+                    Record rightRecord = rightSourceIterator.next();
                     if (compare(leftRecord, rightRecord) == 0) {
                         return leftRecord.concat(rightRecord);
                     }
-                } else if (leftRecordIterator.hasNext()){
+                } else if (leftSourceIterator.hasNext()){
                     // there's no more right records but there's still left
                     // records. Advance left and reset right
-                    this.leftRecord = leftRecordIterator.next();
-                    this.rightRecordIterator.reset();
+                    this.leftRecord = leftSourceIterator.next();
+                    this.rightSourceIterator.reset();
                 } else {
                     // if you're here then there are no more records to fetch
                     return null;

@@ -68,7 +68,7 @@ public class GHJOperator extends JoinOperator {
     private void partition(Partition[] partitions, Iterable<Record> records, boolean left, int pass) {
         // TODO(proj3_part1): implement the partitioning logic
         // You may find the implementation in SHJOperator.java to be a good
-        // starting point. You can use the static method HashFunc.hashDataBox 
+        // starting point. You can use the static method HashFunc.hashDataBox
         // to get a hash value.
         return;
     }

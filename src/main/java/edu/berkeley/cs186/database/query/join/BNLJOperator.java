@@ -56,7 +56,7 @@ public class BNLJOperator extends JoinOperator {
         private BacktrackingIterator<Record> leftBlockIterator;
         // Iterator over records in the current right page
         private BacktrackingIterator<Record> rightPageIterator;
-        // The current record on the left page
+        // The current record from the left relation
         private Record leftRecord;
         // The next record to return
         private Record nextRecord;
