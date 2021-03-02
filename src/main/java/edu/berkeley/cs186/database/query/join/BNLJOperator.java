@@ -91,8 +91,7 @@ public class BNLJOperator extends JoinOperator {
         /**
          * Fetch the next page of records from the right source.
          * rightPageIterator should be set to a backtracking iterator over up to
-         * one page of records from the left source, and leftRecord
-         * should be set to the first record in this block.
+         * one page of records from the right source.
          *
          * If there are no more records in the right source, this method should
          * do nothing.
