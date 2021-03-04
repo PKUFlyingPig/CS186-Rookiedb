@@ -138,7 +138,7 @@ public class SortOperator extends QueryOperator {
 
     /**
      * Does an external merge sort over the records of the source operator.
-     * You may find the getBlockIterator method of the QueryPlan class useful
+     * You may find the getBlockIterator method of the QueryOperator class useful
      * here to create your initial set of sorted runs.
      *
      * @return a single run containing all of the source operator's records in
