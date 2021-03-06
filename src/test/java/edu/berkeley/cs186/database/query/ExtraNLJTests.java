@@ -81,7 +81,7 @@ public class ExtraNLJTests {
             transaction.insert("leftTable", leftRecord);
         }
         for (int i = 0; i < rightVals.length; i++) {
-            Record rightRecord = new Record("left", i/4 + 1, (i % 4) + 1, rightVals[i]);
+            Record rightRecord = new Record("right", i/4 + 1, (i % 4) + 1, rightVals[i]);
             rightRecords.add(rightRecord);
             transaction.insert("rightTable", rightRecord);
         }
