@@ -627,7 +627,7 @@ public class QueryPlan {
         // tables have been joined.
         //
         // Set the final operator to the lowest cost operator from the last
-        // pass, add group by and select operators, and return an iterator over
+        // pass, add group by and project operators, and return an iterator over
         // the final operator
         return this.executeNaive(); // TODO(proj3_part2): Replace this!
     }

@@ -305,10 +305,12 @@ public class TestOptimizationJoins {
             query.execute();
             QueryOperator finalOperator = query.getFinalOperator();
 
-            //smallest to largest order
-            assertTrue(finalOperator.toString().contains("\t\t\t-> Seq Scan on table2"));
-            assertTrue(finalOperator.toString().contains("\t\t\t-> Seq Scan on table3"));
+            // The smaller 3 tables should be joined together first
+            assertTrue(finalOperator.toString().contains("\t\t-> Seq Scan on table2"));
+            assertTrue(finalOperator.toString().contains("\t\t-> Seq Scan on table3"));
             assertTrue(finalOperator.toString().contains("\t\t-> Seq Scan on table1"));
+
+            // Largest table should be last to be joined in
             assertTrue(finalOperator.toString().contains("\t-> Seq Scan on table4"));
         }
     }
