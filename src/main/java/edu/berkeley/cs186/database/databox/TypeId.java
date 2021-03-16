@@ -5,7 +5,8 @@ public enum TypeId {
     INT,
     FLOAT,
     STRING,
-    LONG;
+    LONG,
+    BYTE_ARRAY;
 
     private static final TypeId[] values = TypeId.values();
 

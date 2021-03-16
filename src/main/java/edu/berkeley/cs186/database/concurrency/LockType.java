@@ -1,5 +1,8 @@
 package edu.berkeley.cs186.database.concurrency;
 
+/**
+ * Utility methods to track the relationships between different lock types.
+ */
 public enum LockType {
     S,   // shared
     X,   // exclusive

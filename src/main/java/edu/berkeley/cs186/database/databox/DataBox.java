@@ -42,6 +42,8 @@ public abstract class DataBox implements Comparable<DataBox> {
         throw new RuntimeException("not Long type");
     }
 
+    public byte[] getByteArray() { throw new RuntimeException("not Byte Array type"); }
+
     /**
      * Databoxes are serialized as follows:
      * - BoolDataBoxes are serialized to a single byte that is 0 if the
@@ -86,6 +88,11 @@ public abstract class DataBox implements Comparable<DataBox> {
             }
             case LONG: {
                 return new LongDataBox(buf.getLong());
+            }
+            case BYTE_ARRAY: {
+                byte[] bytes = new byte[type.getSizeInBytes()];
+                buf.get(bytes);
+                return new ByteArrayDataBox(bytes, type.getSizeInBytes());
             }
             default: {
                 String err = String.format("Unhandled TypeId %s.",
@@ -134,6 +141,7 @@ public abstract class DataBox implements Comparable<DataBox> {
             double d = (Double) o;
             return new FloatDataBox((float) d);
         }
+        if (o instanceof byte[]) return new ByteArrayDataBox((byte[]) o, ((byte[]) o).length);
         throw new IllegalArgumentException("Object was not a supported data type");
     }
 }

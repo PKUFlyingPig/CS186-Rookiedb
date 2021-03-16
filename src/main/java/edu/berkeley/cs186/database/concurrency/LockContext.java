@@ -34,16 +34,16 @@ public class LockContext {
     protected final Map<Long, Integer> numChildLocks;
 
     // You should not modify or use this directly.
-    protected final Map<Long, LockContext> children;
+    protected final Map<String, LockContext> children;
 
     // Whether or not any new child LockContexts should be marked readonly.
     protected boolean childLocksDisabled;
 
-    public LockContext(LockManager lockman, LockContext parent, Pair<String, Long> name) {
+    public LockContext(LockManager lockman, LockContext parent, String name) {
         this(lockman, parent, name, false);
     }
 
-    protected LockContext(LockManager lockman, LockContext parent, Pair<String, Long> name,
+    protected LockContext(LockManager lockman, LockContext parent, String name,
                           boolean readonly) {
         this.lockman = lockman;
         this.parent = parent;
@@ -62,13 +62,13 @@ public class LockContext {
      * Gets a lock context corresponding to `name` from a lock manager.
      */
     public static LockContext fromResourceName(LockManager lockman, ResourceName name) {
-        Iterator<Pair<String, Long>> names = name.getNames().iterator();
+        Iterator<String> names = name.getNames().iterator();
         LockContext ctx;
-        Pair<String, Long> n1 = names.next();
-        ctx = lockman.context(n1.getFirst(), n1.getSecond());
+        String n1 = names.next();
+        ctx = lockman.context(n1);
         while (names.hasNext()) {
-            Pair<String, Long> p = names.next();
-            ctx = ctx.childContext(p.getFirst(), p.getSecond());
+            String n = names.next();
+            ctx = ctx.childContext(n);
         }
         return ctx;
     }
@@ -249,16 +249,11 @@ public class LockContext {
      * Gets the context for the child with name `name` and readable name
      * `readable`
      */
-    public synchronized LockContext childContext(String readable, long name) {
-        LockContext temp = new LockContext(lockman, this, new Pair<>(readable, name),
+    public synchronized LockContext childContext(String name) {
+        LockContext temp = new LockContext(lockman, this, name,
                 this.childLocksDisabled || this.readonly);
         LockContext child = this.children.putIfAbsent(name, temp);
-        if (child == null) {
-            child = temp;
-        }
-        if (child.name.getCurrentName().getFirst() == null && readable != null) {
-            child.name = new ResourceName(this.name, new Pair<>(readable, name));
-        }
+        if (child == null) child = temp;
         return child;
     }
 
@@ -266,7 +261,7 @@ public class LockContext {
      * Gets the context for the child with name `name`.
      */
     public synchronized LockContext childContext(long name) {
-        return childContext(Long.toString(name), name);
+        return childContext(Long.toString(name));
     }
 
     /**

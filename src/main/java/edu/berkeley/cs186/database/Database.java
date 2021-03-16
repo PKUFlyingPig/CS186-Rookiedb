@@ -37,43 +37,43 @@ import edu.berkeley.cs186.database.table.stats.TableStats;
  * a DiskSpaceManager instance. Upon starting up for the following partitions
  * are allocated through the disk space manager:
  *  - Partition 0: used for log records from the recovery manager
- *  - Partition 1: used by the information_schema.tables table, which persists
+ *  - Partition 1: used by the _metadata.tables table, which persists
  *    information about user created tables
- *  - Partition 2: used by the information_schema.indices table, which persists
+ *  - Partition 2: used by the _metadata.indices table, which persists
  *    information about user created indices
  *
  * Each partition corresponds to a file in `fileDir`. The remaining partitions
  * are used for user created tables and are allocated as tables are created.
- * Internally user created tables are stored with the prefix `tables.` to
- * distinguish them from the metadata tables prefixed with `information_schema.`
- * For example, if a user creates a table `Students` then internally it will
- * be stored as `tables.Students`.
  *
+ * Metadata tables are manually synchronized and use a special locking hierarchy
+ * to improve concurrency. The methods to lock and access metadata has already
+ * been implemented.
+ * - _metadata.tables is a child resource of the database. The children of
+ *   _metadata.tables are the names of a regular user tables. For example, if a
+ *   user wants exclusive access on the metadata of the table `myTable`, they
+ *   would have to acquire an X lock on the resource `database/_metadata.tables/mytable`.
+ *
+ * - _metadata.indices is a child resource of the database. The children of
+ *   _metadata.indices are the names of regular user tables. The grandchildren are
+ *   the names of indices. For example, if a user wants to get shared access to
+ *   the index on column `rowId` of `someTable`, they would need to acquire an
+ *   S lock on `database/_metadata.indices/someTable/rowId`. If a user wanted
+ *   to acquire exclusive access on all of the indices of `someTable` (for example
+ *   to insert a new record into every index) they would need to acquire an
+ *   X lock on `database/_metadata.indices/someTable`.
  */
 public class Database implements AutoCloseable {
-    private static final String METADATA_TABLE_PREFIX = "information_schema.";
-    private static final String USER_TABLE_PREFIX = "tables.";
+    private static final String METADATA_TABLE_PREFIX = "_metadata.";
     private static final String TABLE_INFO_TABLE_NAME = METADATA_TABLE_PREFIX + "tables";
     private static final String INDEX_INFO_TABLE_NAME = METADATA_TABLE_PREFIX + "indices";
     private static final int DEFAULT_BUFFER_SIZE = 262144; // default of 1G
     // effective page size - table metadata size
     private static final int MAX_SCHEMA_SIZE = 4005;
 
-    // information_schema.tables, manages all tables in the database
-    private Table tableInfo;
-    // information_schema.indices, manages all indices in the database
-    private Table indexInfo;
-    // table name to table object mapping
-    private final ConcurrentMap<String, Table> tableLookup;
-    // index name to bplustree object mapping (index name is: "table,col")
-    private final ConcurrentMap<String, BPlusTree> indexLookup;
-    // table name to record id of entry in tableInfo
-    private final ConcurrentMap<String, RecordId> tableInfoLookup;
-    // index name to record id of entry in indexInfo
-    private final ConcurrentMap<String, RecordId> indexInfoLookup;
-    // list of indices for each table
-    private final ConcurrentMap<String, List<String>> tableIndices;
-
+    // _metadata.tables, manages all tables in the database
+    private Table tableMetadata;
+    // _metadata.indices, manages all indices in the database
+    private Table indexMetadata;
     // number of transactions created
     private long numTransactions;
 
@@ -85,11 +85,6 @@ public class Database implements AutoCloseable {
     private final BufferManager bufferManager;
     // recovery manager
     private final RecoveryManager recoveryManager;
-
-    // transaction for creating metadata partitions and loading tables
-    private final Transaction primaryInitTransaction;
-    // transaction for loading indices
-    private final Transaction secondaryInitTransaction;
     // thread pool for background tasks
     private final ExecutorService executor;
 
@@ -97,11 +92,10 @@ public class Database implements AutoCloseable {
     private int workMem = 1024; // default of 4M
     // number of pages of memory available total
     private int numMemoryPages;
-
-    // progress in loading tables/indices
-    private final Phaser loadingProgress = new Phaser(1);
     // active transactions
     private Phaser activeTransactions = new Phaser(0);
+    // Statistics about the contents of the database.
+    private Map<String, TableStats> stats = new ConcurrentHashMap<>();
 
     /**
      * Creates a new database with:
@@ -127,7 +121,6 @@ public class Database implements AutoCloseable {
      */
     public Database(String fileDir, int numMemoryPages) {
         this(fileDir, numMemoryPages, new DummyLockManager());
-        waitSetupFinished();
     }
 
     /**
@@ -172,11 +165,6 @@ public class Database implements AutoCloseable {
         numTransactions = 0;
         this.numMemoryPages = numMemoryPages;
         this.lockManager = lockManager;
-        tableLookup = new ConcurrentHashMap<>();
-        indexLookup = new ConcurrentHashMap<>();
-        tableIndices = new ConcurrentHashMap<>();
-        tableInfoLookup = new ConcurrentHashMap<>();
-        indexInfoLookup = new ConcurrentHashMap<>();
         this.executor = new ThreadPool();
 
         if (useRecoveryManager) {
@@ -206,29 +194,22 @@ public class Database implements AutoCloseable {
         // The redo phase can be run in parallel with the remaining setup
         executor.submit(restartRedo);
 
-        primaryInitTransaction = beginTransaction();
-        secondaryInitTransaction = beginTransaction();
-        TransactionContext.setTransaction(primaryInitTransaction.getTransactionContext());
+        Transaction initTransaction = beginTransaction();
+        TransactionContext.setTransaction(initTransaction.getTransactionContext());
 
         if (!initialized) {
-            // information_schema.tables partition, and information_schema.indices partition
+            // _metadata.tables partition, and _metadata.indices partition
             diskSpaceManager.allocPart(1);
             diskSpaceManager.allocPart(2);
         }
-
-        TransactionContext.unsetTransaction();
-        LockContext dbContext = lockManager.databaseContext();
-        LockContext tableInfoContext = getTableInfoContext();
-
         if (!initialized) {
-            dbContext.acquire(primaryInitTransaction.getTransactionContext(), LockType.X);
             this.initTableInfo();
             this.initIndexInfo();
-            this.loadingProgress.arriveAndDeregister();
         } else {
             this.loadMetadataTables();
-            this.loadTablesAndIndices();
         }
+        initTransaction.commit();
+        TransactionContext.unsetTransaction();
     }
 
     private boolean setupDirectory(String fileDir) {
@@ -249,212 +230,46 @@ public class Database implements AutoCloseable {
         return initialized;
     }
 
-    // create information_schema.tables
+    // create _metadata.tables
     private void initTableInfo() {
-        TransactionContext.setTransaction(primaryInitTransaction.getTransactionContext());
-
         long tableInfoPage0 = DiskSpaceManager.getVirtualPageNum(1, 0);
         diskSpaceManager.allocPage(tableInfoPage0);
 
-        LockContext tableInfoContext = getTableInfoContext();
+        LockContext tableInfoContext = new DummyLockContext();
         PageDirectory tableInfoPageDir = new PageDirectory(bufferManager, 1, tableInfoPage0, (short) 0,
                 tableInfoContext);
-        tableInfo = new Table(TABLE_INFO_TABLE_NAME, getTableInfoSchema(), tableInfoPageDir,
-                              tableInfoContext);
-        Record tableEntry = new Record(TABLE_INFO_TABLE_NAME, 1, tableInfoPage0,
-                false, new String(getTableInfoSchema().toBytes()));
-        RecordId entryId = tableInfo.addRecord(tableEntry);
-        tableInfoLookup.put(TABLE_INFO_TABLE_NAME, entryId);
-        tableLookup.put(TABLE_INFO_TABLE_NAME, tableInfo);
-        tableIndices.put(TABLE_INFO_TABLE_NAME, Collections.emptyList());
-
-        primaryInitTransaction.commit();
-        TransactionContext.unsetTransaction();
+        tableMetadata = new Table(TABLE_INFO_TABLE_NAME, getTableInfoSchema(), tableInfoPageDir,
+                              tableInfoContext, stats);
     }
 
-    // create information_schema.indices
+    // create _metadata.indices
     private void initIndexInfo() {
-        TransactionContext.setTransaction(secondaryInitTransaction.getTransactionContext());
-
         long indexInfoPage0 = DiskSpaceManager.getVirtualPageNum(2, 0);
         diskSpaceManager.allocPage(indexInfoPage0);
-
-        LockContext indexInfoContext = getIndexInfoContext();
+        LockContext indexInfoContext = new DummyLockContext();
         PageDirectory pageDirectory = new PageDirectory(bufferManager, 2, indexInfoPage0, (short) 0,
                                               indexInfoContext);
-        indexInfo = new Table(INDEX_INFO_TABLE_NAME, getIndexInfoSchema(), pageDirectory, indexInfoContext);
-        indexInfo.setFullPageRecords();
-        tableInfoLookup.put(INDEX_INFO_TABLE_NAME, tableInfo.addRecord(new Record(
-                INDEX_INFO_TABLE_NAME, 2, indexInfoPage0, false,
-                new String(getIndexInfoSchema().toBytes()))
-        ));
-        tableLookup.put(INDEX_INFO_TABLE_NAME, indexInfo);
-        tableIndices.put(INDEX_INFO_TABLE_NAME, Collections.emptyList());
-
-        secondaryInitTransaction.commit();
-        TransactionContext.unsetTransaction();
+        indexMetadata = new Table(INDEX_INFO_TABLE_NAME, getIndexInfoSchema(), pageDirectory, indexInfoContext, stats);
     }
 
     private void loadMetadataTables() {
-        // load information_schema.tables
-        LockContext tableInfoContext = getTableInfoContext();
+        // Note: both metadata tables use DummyLockContexts. This is intentional,
+        // since we manually synchronize both tables to improve concurrency.
+
+        // load _metadata.tables
+        LockContext tableInfoContext = new DummyLockContext();
         PageDirectory tableInfoPageDir = new PageDirectory(bufferManager, 1,
                 DiskSpaceManager.getVirtualPageNum(1, 0), (short) 0, tableInfoContext);
-        tableInfo = new Table(TABLE_INFO_TABLE_NAME, getTableInfoSchema(), tableInfoPageDir,
-                              tableInfoContext);
-        tableLookup.put(TABLE_INFO_TABLE_NAME, tableInfo);
-        tableIndices.put(TABLE_INFO_TABLE_NAME, Collections.emptyList());
-        // load information_schema.indices
-        LockContext indexInfoContext = getIndexInfoContext();
+        tableMetadata = new Table(TABLE_INFO_TABLE_NAME, getTableInfoSchema(), tableInfoPageDir,
+                tableInfoContext, stats);
+
+        // load _metadata.indices
+        LockContext indexInfoContext = new DummyLockContext();
         PageDirectory indexInfoPageDir = new PageDirectory(bufferManager, 2,
                 DiskSpaceManager.getVirtualPageNum(2, 0), (short) 0, indexInfoContext);
-        indexInfo = new Table(INDEX_INFO_TABLE_NAME, getIndexInfoSchema(), indexInfoPageDir,
-                              indexInfoContext);
-        indexInfo.setFullPageRecords();
-        tableLookup.put(INDEX_INFO_TABLE_NAME, indexInfo);
-        tableIndices.put(INDEX_INFO_TABLE_NAME, Collections.emptyList());
-    }
-
-    // load tables from information_schema.tables
-    private void loadTablesAndIndices() {
-        Iterator<RecordId> iter = tableInfo.ridIterator();
-
-        LockContext dbContext = lockManager.databaseContext();
-        LockContext tableInfoContext = getTableInfoContext();
-        TransactionContext primaryTC = primaryInitTransaction.getTransactionContext();
-
-        dbContext.acquire(primaryTC, LockType.IX);
-        tableInfoContext.acquire(primaryTC, LockType.IX);
-
-        for (RecordId recordId : (Iterable<RecordId>) () -> iter) {
-            TransactionContext.setTransaction(primaryTC);
-
-            try {
-                LockContext tableMetadataContext = tableInfoContext.childContext(recordId.getPageNum());
-                // need an X lock here even though we're only reading, to prevent others from attempting to
-                // fetch table object before it has been constructed
-                tableMetadataContext.acquire(primaryTC, LockType.X);
-                TableMetadata record = new TableMetadata(tableInfo.getRecord(recordId));
-                if (!record.isAllocated()) {
-                    tableInfo.deleteRecord(recordId);
-                    continue;
-                }
-
-                if (record.isTemporary) {
-                    continue; // no need to load temp tables - they will be cleaned up eventually by recovery
-                }
-
-                tableInfoLookup.put(record.tableName, recordId);
-                tableIndices.putIfAbsent(record.tableName, Collections.synchronizedList(new ArrayList<>()));
-
-                if (record.tableName.startsWith(METADATA_TABLE_PREFIX)) {
-                    tableMetadataContext.release(primaryTC);
-                    continue;
-                }
-
-                loadingProgress.register();
-                executor.execute(() -> {
-                    loadingProgress.arriveAndAwaitAdvance();
-                    TransactionContext.setTransaction(primaryInitTransaction.getTransactionContext());
-
-                    // X(table) acquired during table ctor; not needed earlier because no one can even check
-                    // if table exists due to X(table metadata) lock
-                    LockContext tableContext = getTableContext(record.tableName, record.partNum);
-                    PageDirectory pageDirectory = new PageDirectory(bufferManager, record.partNum, record.pageNum, (short) 0,
-                                                          tableContext);
-                    Table table = new Table(record.tableName, record.schema, pageDirectory, tableContext);
-                    tableLookup.put(record.tableName, table);
-
-                    // sync on lock manager to ensure that multiple jobs don't
-                    // try to perform LockContext operations for the same transaction simultaneously
-                    synchronized (lockManager) {
-                        LockContext metadataContext = getTableInfoContext().childContext(recordId.getPageNum());
-
-                        tableContext.release(primaryTC);
-                        metadataContext.release(primaryTC);
-                    }
-
-                    TransactionContext.unsetTransaction();
-                    loadingProgress.arriveAndDeregister();
-                });
-            } finally {
-                TransactionContext.unsetTransaction();
-            }
-        }
-
-        this.loadIndices();
-
-        loadingProgress.arriveAndAwaitAdvance(); // start table/index loading
-
-        executor.execute(() -> {
-            loadingProgress.arriveAndAwaitAdvance(); // wait for all tables and indices to load
-            primaryInitTransaction.commit();
-            secondaryInitTransaction.commit();
-            loadingProgress.arriveAndDeregister();
-            // add toggleable auto-escalate
-        });
-    }
-
-    // load indices from information_schema.indices
-    private void loadIndices() {
-        Iterator<RecordId> iter = indexInfo.ridIterator();
-
-        LockContext dbContext = lockManager.databaseContext();
-        LockContext tableInfoContext = getTableInfoContext();
-        LockContext indexInfoContext = getIndexInfoContext();
-        TransactionContext secondaryTC = secondaryInitTransaction.getTransactionContext();
-
-        dbContext.acquire(secondaryTC, LockType.IX);
-        tableInfoContext.acquire(secondaryTC, LockType.IS);
-        indexInfoContext.acquire(secondaryTC, LockType.IX);
-
-        for (RecordId recordId : (Iterable<RecordId>) () -> iter) {
-            LockContext indexMetadataContext = indexInfoContext.childContext(recordId.getPageNum());
-            // need an X lock here even though we're only reading, to prevent others from attempting to
-            // fetch index object before it has been constructed
-            indexMetadataContext.acquire(secondaryTC, LockType.X);
-
-            BPlusTreeMetadata metadata = parseIndexMetadata(indexInfo.getRecord(recordId));
-            if (metadata == null) {
-                indexInfo.deleteRecord(recordId);
-                return;
-            }
-
-            loadingProgress.register();
-            executor.execute(() -> {
-                loadingProgress.arriveAndAwaitAdvance();
-
-                String indexName = metadata.getName();
-                LockContext indexContext = getIndexContext(indexName, metadata.getPartNum());
-                indexContext.acquire(secondaryTC, LockType.X);
-
-                try {
-                    BPlusTree tree = new BPlusTree(bufferManager, metadata, indexContext);
-                    if (!tableIndices.containsKey(metadata.getTableName())) {
-                        // the list only needs to be synchronized while indices are being loaded, as multiple
-                        // indices may attempt to add themselves to the list at the same time
-                        tableIndices.put(metadata.getTableName(), Collections.synchronizedList(new ArrayList<>()));
-                    }
-                    tableIndices.get(metadata.getTableName()).add(indexName);
-                    indexLookup.put(indexName, tree);
-                    indexInfoLookup.put(indexName, recordId);
-
-                    synchronized (lockManager) {
-                        indexContext.release(secondaryTC);
-                    }
-                } finally {
-                    loadingProgress.arriveAndDeregister();
-                }
-            });
-        }
-        loadingProgress.arriveAndAwaitAdvance(); // start index loading
-    }
-
-    // wait until setup has finished
-    public void waitSetupFinished() {
-        while (!loadingProgress.isTerminated()) {
-            loadingProgress.awaitAdvance(loadingProgress.getPhase());
-        }
+        indexMetadata = new Table(INDEX_INFO_TABLE_NAME, getIndexInfoSchema(), indexInfoPageDir,
+                              indexInfoContext, stats);
+        indexMetadata.setFullPageRecords();
     }
 
     // wait for all transactions to finish
@@ -483,14 +298,8 @@ public class Database implements AutoCloseable {
 
         this.recoveryManager.close();
 
-        this.tableInfo = null;
-        this.indexInfo = null;
-
-        this.tableLookup.clear();
-        this.indexLookup.clear();
-        this.tableInfoLookup.clear();
-        this.indexInfoLookup.clear();
-        this.tableIndices.clear();
+        this.tableMetadata = null;
+        this.indexMetadata = null;
 
         this.bufferManager.close();
         this.diskSpaceManager.close();
@@ -512,11 +321,6 @@ public class Database implements AutoCloseable {
         return bufferManager;
     }
 
-    @Deprecated
-    public Table getTable(String tableName) {
-        return tableLookup.get(prefixUserTableName(tableName));
-    }
-
     public int getWorkMem() {
         // cap work memory at number of memory pages -- this is likely to cause out of memory
         // errors if actually set this high
@@ -528,14 +332,14 @@ public class Database implements AutoCloseable {
     }
 
     /**
-     * @return Schema for information_schema.tables with fields:
+     * @return Schema for _metadata.tables with fields:
      *   | field name   | field type
      * --+--------------+-------------------------
      * 0 | table_name   | string(32)
      * 1 | part_num     | int
      * 2 | page_num     | long
      * 3 | is_temporary | bool
-     * 4 | schema       | string(MAX_SCHEMA_SIZE)
+     * 4 | schema       | byte array(MAX_SCHEMA_SIZE)
      */
     private Schema getTableInfoSchema() {
         return new Schema()
@@ -543,11 +347,11 @@ public class Database implements AutoCloseable {
                 .add("part_num", Type.intType())
                 .add("page_num", Type.longType())
                 .add("is_temporary", Type.boolType())
-                .add("schema", Type.stringType(MAX_SCHEMA_SIZE));
+                .add("schema", Type.byteArrayType(MAX_SCHEMA_SIZE));
     }
 
     /**
-     * @return Schema for information_schema.indices with fields:
+     * @return Schema for _metadata.indices with fields:
      *   | field name          | field type
      * --+---------------------+------------
      * 0 | table_name          | string(32)
@@ -571,7 +375,7 @@ public class Database implements AutoCloseable {
                 .add("height", Type.intType());
     }
 
-    // a single row of information_schema.tables
+    // a single row of _metadata.tables
     private static class TableMetadata {
         String tableName;
         int partNum;
@@ -596,150 +400,161 @@ public class Database implements AutoCloseable {
         }
 
         Record toRecord() {
-            return new Record(tableName, partNum, pageNum, isTemporary,
-                       new String(schema.toBytes())
-            );
-        }
-
-        boolean isAllocated() {
-            return this.partNum >= 0;
+            byte[] schemaBytes = schema.toBytes();
+            byte[] padded = new byte[MAX_SCHEMA_SIZE];
+            System.arraycopy(schemaBytes, 0, padded, 0, schemaBytes.length);
+            return new Record(tableName, partNum, pageNum, isTemporary, padded);
         }
     }
 
-    // row of information_schema.indices --> BPlusTreeMetadata
-    private BPlusTreeMetadata parseIndexMetadata(Record record) {
-        String tableName = record.getValue(0).getString();
-        String colName = record.getValue(1).getString();
-        int order = record.getValue(2).getInt();
-        int partNum = record.getValue(3).getInt();
-        long rootPageNum = record.getValue(4).getLong();
-        int typeIdIndex = record.getValue(5).getInt();
-        int typeSize = record.getValue(6).getInt();
-        int height = record.getValue(7).getInt();
-        if (partNum < 0) return null;
-        Type keySchema = new Type(TypeId.values()[typeIdIndex], typeSize);
-        return new BPlusTreeMetadata(tableName, colName, keySchema, order, partNum, rootPageNum, height);
-    }
-
-    // get the lock context for information_schema.tables
-    private LockContext getTableInfoContext() {
-        return lockManager.databaseContext().childContext(TABLE_INFO_TABLE_NAME, 1L);
-    }
-
-    // get the lock context for information_schema.indices
-    private LockContext getIndexInfoContext() {
-        return lockManager.databaseContext().childContext(INDEX_INFO_TABLE_NAME, 2L);
-    }
-
-    // get the lock context for a table
-    private LockContext getTableContext(String table, int partNum) {
-        return lockManager.databaseContext().childContext(prefixUserTableName(table), partNum);
-    }
-
-    // get the lock context for a table
-    private LockContext getTableContext(String table) {
-        return getTableContext(table, tableLookup.get(prefixUserTableName(table)).getPartNum());
-    }
-
-    // get the lock context for an index
-    private LockContext getIndexContext(String index, int partNum) {
-        return lockManager.databaseContext().childContext("indices." + index, partNum);
-    }
-
-    // get the lock context for an index
-    LockContext getIndexContext(String index) {
-        return getIndexContext(index, indexLookup.get(index).getPartNum());
-    }
-
-    private String prefixUserTableName(String table) {
-        if (table.contains(".")) {
-            return table;
-        }
-        return USER_TABLE_PREFIX + table;
+    // Trims and lowercases table and column names so that lookups are
+    // case-insensitive and format-insensitive
+    private String normalize(String name) {
+        return name.trim().toLowerCase();
     }
 
     /**
-     * Safely creates a row in information_schema.tables for tableName if none
-     * exists (with isAllocated=false), and locks the table metadata row with
-     * the specified lock to ensure no changes can be made until the current
-     * transaction commits.
-     * @param tableName The name of the table we're getting a lock on
-     * @param lockType The type of lock we're trying to acquire
+     * @return (rid, metadata) pairs for all of the tables currently in the
+     * database. Assumes that caller has already acquired necessary locks on
+     * metadata.
      */
-    void lockTableMetadata(String tableName, LockType lockType) {
-        LockContext tableInfoContext = getTableInfoContext();
-        // can't do this in one .compute() call, because we may need to block requesting
-        // locks on the database/information_schema.tables, and a large part of tableInfoLookup
-        // will be blocked while we're inside a compute call.
-        boolean mayNeedToCreate = !tableInfoLookup.containsKey(tableName);
-        if (mayNeedToCreate) {
-            // Between when we called containsKey and here the table might have
-            // been created and inserted into tableInfoLookup. Compute gives us
-            // exclusive access to tableInfoLookup.
-            tableInfoLookup.compute(tableName, (tableName_, recordId) -> {
-                if (recordId != null) { // record created between containsKey call and this
-                    return recordId;
-                }
-                // should not block
-                return Database.this.tableInfo.addRecord(
-                        new TableMetadata(tableName_).toRecord());
-            });
+    private List<Pair<RecordId, TableMetadata>> scanTableMetadata() {
+        List<Pair<RecordId, TableMetadata>> result = new ArrayList<>();
+        synchronized(tableMetadata) {
+            for(RecordId rid: (Iterable<RecordId>) tableMetadata::ridIterator) {
+                Record record = tableMetadata.getRecord(rid);
+                TableMetadata metadata = new TableMetadata(record);
+                result.add(new Pair<>(rid, metadata));
+            }
         }
-        // By here tableName should exist in tableInfo and tableInfoLookup
-
-        // Lock the page that the table metadata lives on.
-        LockContext tableMetadataContext = tableInfoContext.childContext(tableInfoLookup.get(
-                                               tableName).getPageNum());
-        LockUtil.ensureSufficientLockHeld(tableMetadataContext, lockType);
+        return result;
     }
 
-    private TableMetadata getTableMetadata(String tableName) {
-        RecordId rid = tableInfoLookup.get(tableName);
-        if (rid == null) {
-            return new TableMetadata(tableName);
+    /**
+     * @param tableName
+     * @return the (rid, metadata) pair for the table specified by `tableName`'s
+     * entry inside of _metadata.tables. Returns null if the table does not exist.
+     */
+    private Pair<RecordId, TableMetadata> getTableMetadata(String tableName) {
+        tableName = normalize(tableName);
+        // We'll need shared access to the entry if it exists in order to read it
+        LockUtil.ensureSufficientLockHeld(getTableMetadataContext(tableName), LockType.S);
+        for (Pair<RecordId, TableMetadata> p : scanTableMetadata()) {
+            String currName = normalize(p.getSecond().tableName);
+            if (currName.equals(tableName)) return p;
         }
-        return new TableMetadata(tableInfo.getRecord(rid));
+        return null;
     }
 
-    // safely creates a row in information_schema.indices for tableName,columnName if none exists
-    // (with partNum=-1), and locks the index metadata row with the specified lock to ensure no
-    // changes can be made until the current transaction commits.
-    void lockIndexMetadata(String indexName, LockType lockType) {
-        LockContext indexInfoContext = getIndexInfoContext();
-
-        // see getTableMetadata - same logic/structure, just with a different table
-        boolean mayNeedToCreate = !indexInfoLookup.containsKey(indexName);
-        if (mayNeedToCreate) {
-            // Between when we called containsKey and here the index might have
-            // been created and inserted into indexInfoLookup. Compute gives us
-            // exclusive access to indexInfoLookup.
-            indexInfoLookup.compute(indexName, (indexName_, recordId) -> {
-                if (recordId != null) { // record created between containsKey call and this
-                    return recordId;
-                }
-                String[] parts = indexName.split(",", 2);
-                Record invalidatedEntry = new Record(parts[0], parts[1], -1, -1,
-                        DiskSpaceManager.INVALID_PAGE_NUM, TypeId.INT.ordinal(),
-                        4, -1
-                );
-                return Database.this.indexInfo.addRecord(invalidatedEntry);
-            });
-        }
-        // By here indexName should exist in indexInfo and indexInfoLookup
-
-        // Lock the page that the index metadata lives on.
-        LockContext indexMetadataContext = indexInfoContext.childContext(indexInfoLookup.get(
-                                               indexName).getPageNum());
-        LockUtil.ensureSufficientLockHeld(indexMetadataContext, lockType);
+    // TableMetadata -> Table object
+    private Table tableFromMetadata(TableMetadata metadata) {
+        String tableName = normalize(metadata.tableName);
+        LockContext tableContext = getTableContext(tableName);
+        long page0 = DiskSpaceManager.getVirtualPageNum(metadata.partNum, 0);
+        PageDirectory pd = new PageDirectory(bufferManager, metadata.partNum, page0, (short) 0, tableContext);
+        return new Table(metadata.tableName, metadata.schema, pd, tableContext, stats);
     }
 
-    private BPlusTreeMetadata getIndexMetadata(String tableName, String columnName) {
-        String indexName = tableName + "," + columnName;
-        RecordId rid = indexInfoLookup.get(indexName);
-        if (rid == null) {
-            return null;
+    /**
+     * @return (rid, metadata) pairs for all of the indices currently
+     * in the database. Assumes that caller has already acquired necessary locks
+     * on metadata.
+     */
+    private List<Pair<RecordId, BPlusTreeMetadata>> scanIndexMetadata() {
+        List<Pair<RecordId, BPlusTreeMetadata>> result = new ArrayList<>();
+        synchronized(indexMetadata) {
+            for(RecordId rid: (Iterable<RecordId>) indexMetadata::ridIterator) {
+                Record record = indexMetadata.getRecord(rid);
+                BPlusTreeMetadata metadata = new BPlusTreeMetadata(record);
+                result.add(new Pair<>(rid, metadata));
+            }
         }
-        return parseIndexMetadata(indexInfo.getRecord(rid));
+        return result;
+    }
+
+    /**
+     * @param tableName
+     * @param columnName
+     * @return the (rid, metadata) pair corresponding to the index on
+     * tableName.columnName inside of _metadata.indices. Returns null if no
+     * such index exists.
+     */
+    private Pair<RecordId, BPlusTreeMetadata> getColumnIndexMetadata(String tableName, String columnName) {
+        tableName = normalize(tableName);
+        columnName = normalize(columnName);
+        // We'll need shared access to the entry if it exists in order to read it
+        LockUtil.ensureSufficientLockHeld(getColumnIndexMetadataContext(tableName, columnName), LockType.S);
+        for (Pair<RecordId, BPlusTreeMetadata> p: scanIndexMetadata()) {
+            BPlusTreeMetadata metadata = p.getSecond();
+            String currTableName = normalize(metadata.getTableName());
+            String currColumnName = normalize(metadata.getColName());
+            if (currTableName.equals(tableName) && currColumnName.equals(columnName)) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @param tableName
+     * @return a list of (rid, metadata) pairs for all of the indices on the
+     * table `tableName` inside of _metadata.indices. Returns an empty list
+     * if the table does not exist, or if no indices are built on the table.
+     */
+    private List<Pair<RecordId, BPlusTreeMetadata>> getTableIndicesMetadata(String tableName) {
+        List<Pair<RecordId, BPlusTreeMetadata>> result = new ArrayList<>();
+        tableName = normalize(tableName);
+        // We'll need shared access to the entry if it exists in order to read it
+        LockUtil.ensureSufficientLockHeld(getTableIndexMetadataContext(tableName), LockType.S);
+        for (Pair<RecordId, BPlusTreeMetadata> p: scanIndexMetadata()) {
+            BPlusTreeMetadata metadata = p.getSecond();
+            String currTableName = normalize(metadata.getTableName());
+            if (currTableName.equals(tableName)) {
+                result.add(p);
+            }
+        }
+        return result;
+    }
+
+    // btree metadata -> btree object
+    private BPlusTree indexFromMetadata(BPlusTreeMetadata metadata) {
+        String tableName = normalize(metadata.getTableName());
+        String columnName = normalize(metadata.getColName());
+        LockContext indexContext = lockManager.databaseContext().childContext(tableName + "." + columnName);
+        return new BPlusTree(bufferManager, metadata, indexContext);
+    }
+
+    // get the lock context for database/_metadata.tables
+    private LockContext getTableInfoContext() {
+        return lockManager.databaseContext().childContext(TABLE_INFO_TABLE_NAME);
+    }
+
+    // get the lock context for database/_metadata.indices
+    private LockContext getIndexInfoContext() {
+        return lockManager.databaseContext().childContext(INDEX_INFO_TABLE_NAME);
+    }
+
+    // get the lock context for database/tableName
+    private LockContext getTableContext(String tableName) {
+        return lockManager.databaseContext().childContext(normalize(tableName));
+    }
+
+    // get the lock context for _metadata.tables/tableName
+    private LockContext getTableMetadataContext(String tableName) {
+        tableName = normalize(tableName);
+        return getTableInfoContext().childContext(tableName);
+    }
+
+    // get the lock context for database/_metadata.indices/tableName
+    private LockContext getTableIndexMetadataContext(String tableName) {
+        tableName = normalize(tableName);
+        return getIndexInfoContext().childContext(tableName);
+    }
+
+    // get the lock context for database/_metadata.indices/tableName/columnName
+    private LockContext getColumnIndexMetadataContext(String tableName, String columnName) {
+        columnName = normalize(columnName);
+        return getTableIndexMetadataContext(tableName).childContext(columnName);
     }
 
     /**
@@ -823,42 +638,22 @@ public class Database implements AutoCloseable {
 
             int partNum = diskSpaceManager.allocPart();
             long pageNum = diskSpaceManager.allocPage(partNum);
-            Record tableEntry = new Record( tableName, partNum, pageNum, true,
-                    new String(schema.toBytes()));
-            RecordId recordId = tableInfo.addRecord(tableEntry);
-            tableInfoLookup.put(tableName, recordId);
-            LockContext lockContext = getTableContext(tableName, partNum);
-            lockContext.disableChildLocks();
-            PageDirectory pageDirectory = new PageDirectory(bufferManager, partNum, pageNum, (short) 0, lockContext);
-            tempTables.put(tempTableName, new Table(tableName, schema, pageDirectory, lockContext));
-            tableLookup.put(tableName, tempTables.get(tempTableName));
-            tableIndices.put(tableName, Collections.emptyList());
-
+            // We can use dummy contexts since this table will only be visible from the current transaction
+            PageDirectory pageDirectory = new PageDirectory(bufferManager, partNum, pageNum, (short) 0, new DummyLockContext());
+            tempTables.put(tempTableName, new Table(tableName, schema, pageDirectory, new DummyLockContext(), stats));
             return tempTableName;
         }
 
         private void deleteTempTable(String tempTableName) {
-            if (!this.tempTables.containsKey(tempTableName)) {
-                return;
-            }
-
-            String tableName = prefixTempTableName(tempTableName);
-            RecordId recordId = tableInfoLookup.remove(tableName);
-            Record record = tableInfo.deleteRecord(recordId);
-            TableMetadata tableInfoRecord = new TableMetadata(record);
-            bufferManager.freePart(tableInfoRecord.partNum);
-            tempTables.remove(tempTableName);
-            tableLookup.remove(tableName);
-            tableIndices.remove(tableName);
+            if (!this.tempTables.containsKey(tempTableName)) return;
+            Table t = tempTables.remove(tempTableName);
+            bufferManager.freePart(t.getPartNum());
         }
 
         @Override
         public void deleteAllTempTables() {
             Set<String> keys = new HashSet<>(tempTables.keySet());
-
-            for (String tableName : keys) {
-                deleteTempTable(tableName);
-            }
+            for (String tableName : keys) deleteTempTable(tableName);
         }
 
         @Override
@@ -873,30 +668,44 @@ public class Database implements AutoCloseable {
 
         @Override
         public boolean indexExists(String tableName, String columnName) {
-            try {
-                resolveIndexFromName(tableName, columnName);
-            } catch (DatabaseException e) {
-                return false;
-            }
-            return true;
+            if (aliases.containsKey(tableName)) tableName = aliases.get(tableName);
+            return getColumnIndexMetadata(tableName, columnName) != null;
         }
 
         @Override
         public void updateIndexMetadata(BPlusTreeMetadata metadata) {
             Record updated = metadata.toRecord();
-            indexInfo.updateRecord(indexInfoLookup.get(metadata.getName()), updated);
+            String tableName = normalize(metadata.getTableName());
+            String columnName = normalize(metadata.getColName());
+            // Exclusive access is needed on the index metadata entry to update it
+            LockUtil.ensureSufficientLockHeld(getColumnIndexMetadataContext(tableName, columnName), LockType.X);
+            for (Pair<RecordId, BPlusTreeMetadata> p: scanIndexMetadata()) {
+                RecordId rid = p.getFirst();
+                BPlusTreeMetadata currMetadata = p.getSecond();
+                String currColumnName = normalize(currMetadata.getColName());
+                String currTableName = normalize(currMetadata.getTableName());
+                if (currColumnName.equals(columnName) && currTableName.equals(tableName)) {
+                    synchronized (indexMetadata) {
+                        indexMetadata.updateRecord(rid, updated);
+                        return;
+                    }
+                }
+            }
         }
 
         @Override
         public Iterator<Record> sortedScan(String tableName, String columnName) {
             Table tab = getTable(tableName);
-            // We only need read access to perform a scan
+            tableName = tab.getName();
+            // Since we'll likely scan multiple pages of records, its better
+            // to get an S lock on the whole table up front
             LockUtil.ensureSufficientLockHeld(getTableContext(tableName), LockType.S);
+            Pair<RecordId, BPlusTreeMetadata> pair = getColumnIndexMetadata(tableName, columnName);
 
-            try {
-                Pair<String, BPlusTree> index = resolveIndexFromName(tableName, columnName);
-                return tab.recordIterator(index.getSecond().scanAll());
-            } catch (DatabaseException e1) {
+            if (pair != null) {
+                BPlusTree tree = indexFromMetadata(pair.getSecond());
+                return tab.recordIterator(tree.scanAll());
+            } else {
                 try {
                     return new SortOperator(this, new SequentialScanOperator(this, tableName),
                         columnName).iterator();
@@ -909,17 +718,20 @@ public class Database implements AutoCloseable {
         @Override
         public Iterator<Record> sortedScanFrom(String tableName, String columnName, DataBox startValue) {
             Table tab = getTable(tableName);
-            Pair<String, BPlusTree> index = resolveIndexFromName(tableName, columnName);
-            // We only need read access to scan a table
+            tableName = tab.getName();
+            BPlusTree tree = indexFromMetadata(getColumnIndexMetadata(tableName, columnName).getSecond());
+            // Since we'll likely scan multiple pages of records, its better
+            // to get an S lock on the whole table up front
             LockUtil.ensureSufficientLockHeld(getTableContext(tableName), LockType.S);
-            return tab.recordIterator(index.getSecond().scanGreaterEqual(startValue));
+            return tab.recordIterator(tree.scanGreaterEqual(startValue));
         }
 
         @Override
         public Iterator<Record> lookupKey(String tableName, String columnName, DataBox key) {
             Table tab = getTable(tableName);
-            Pair<String, BPlusTree> index = resolveIndexFromName(tableName, columnName);
-            return tab.recordIterator(index.getSecond().scanEqual(key));
+            tableName = tab.getName();
+            BPlusTree tree = indexFromMetadata(getColumnIndexMetadata(tableName, columnName).getSecond());
+            return tab.recordIterator(tree.scanEqual(key));
         }
 
         @Override
@@ -929,21 +741,27 @@ public class Database implements AutoCloseable {
 
         @Override
         public boolean contains(String tableName, String columnName, DataBox key) {
-            Pair<String, BPlusTree> index = resolveIndexFromName(tableName, columnName);
-            return index.getSecond().get(key).isPresent();
+            tableName = aliases.getOrDefault(tableName, tableName);
+            BPlusTree tree = indexFromMetadata(getColumnIndexMetadata(tableName, columnName).getSecond());
+            return tree.get(key).isPresent();
         }
 
         @Override
         public RecordId addRecord(String tableName, Record record) {
             Table tab = getTable(tableName);
+            tableName = tab.getName();
+            if (tab == null) {
+                throw new DatabaseException("table `" + tableName + "` does not exist!");
+            }
             RecordId rid = tab.addRecord(record);
             Schema s = tab.getSchema();
             List<String> colNames = s.getFieldNames();
 
-            for (String indexName : tableIndices.get(tab.getName())) {
-                String column = indexName.split(",")[1];
+            for (Pair<RecordId, BPlusTreeMetadata> p: getTableIndicesMetadata(tableName)) {
+                BPlusTree tree = indexFromMetadata(p.getSecond());
+                String column = tree.getMetadata().getColName();
                 DataBox key = record.getValue(colNames.indexOf(column));
-                resolveIndexFromName(tableName, column).getSecond().put(key, rid);
+                tree.put(key, rid);
             }
             return rid;
         }
@@ -951,15 +769,16 @@ public class Database implements AutoCloseable {
         @Override
         public RecordId deleteRecord(String tableName, RecordId rid) {
             Table tab = getTable(tableName);
+            tableName = tab.getName();
             Schema s = tab.getSchema();
-
-            Record rec = tab.deleteRecord(rid);
-            List<DataBox> values = rec.getValues();
+            Record record = tab.deleteRecord(rid);
             List<String> colNames = s.getFieldNames();
 
-            for (String indexName : tableIndices.get(tab.getName())) {
-                String column = indexName.split(",")[1];
-                resolveIndexFromName(tableName, column).getSecond().remove(values.get(colNames.indexOf(column)));
+            for (Pair<RecordId, BPlusTreeMetadata> p: getTableIndicesMetadata(tableName)) {
+                BPlusTree tree = indexFromMetadata(p.getSecond());
+                String column = tree.getMetadata().getColName();
+                DataBox key = record.getValue(colNames.indexOf(column));
+                tree.remove(key);
             }
             return rid;
         }
@@ -972,17 +791,19 @@ public class Database implements AutoCloseable {
         @Override
         public RecordId updateRecord(String tableName, RecordId rid, Record updated) {
             Table tab = getTable(tableName);
+            tableName = tab.getName();
             Schema s = tab.getSchema();
 
             Record old = tab.updateRecord(rid, updated);
             List<String> colNames = s.getFieldNames();
 
-            for (String indexName : tableIndices.get(tab.getName())) {
-                String column = indexName.split(",")[1];
-                int i = colNames.indexOf(column);
-                BPlusTree tree = resolveIndexFromName(tableName, column).getSecond();
-                tree.remove(old.getValue(i));
-                tree.put(updated.getValue(i), rid);
+            for (Pair<RecordId, BPlusTreeMetadata> p: getTableIndicesMetadata(tableName)) {
+                BPlusTree tree = indexFromMetadata(p.getSecond());
+                String column = tree.getMetadata().getColName();
+                DataBox oldKey = old.getValue(colNames.indexOf(column));
+                DataBox newKey = updated.getValue(colNames.indexOf(column));
+                tree.remove(oldKey);
+                tree.put(newKey, rid);
             }
             return rid;
         }
@@ -992,6 +813,7 @@ public class Database implements AutoCloseable {
                                       UnaryOperator<DataBox> targetValue,
                                       String predColumnName, PredicateOperator predOperator, DataBox predValue) {
             Table tab = getTable(tableName);
+            tableName = tab.getName();
             Iterator<RecordId> recordIds = tab.ridIterator();
 
             Schema s = tab.getSchema();
@@ -1014,6 +836,7 @@ public class Database implements AutoCloseable {
         public void deleteRecordWhere(String tableName, String predColumnName,
                                       PredicateOperator predOperator, DataBox predValue) {
             Table tab = getTable(tableName);
+            tableName = tab.getName();
             Iterator<RecordId> recordIds = tab.ridIterator();
 
             Schema s = tab.getSchema();
@@ -1060,12 +883,18 @@ public class Database implements AutoCloseable {
 
         @Override
         public int getTreeOrder(String tableName, String columnName) {
-            return resolveIndexMetadataFromName(tableName, columnName).getSecond().getOrder();
+            if (aliases.containsKey(tableName)) tableName = aliases.get(tableName);
+            Pair<RecordId, BPlusTreeMetadata> pair = getColumnIndexMetadata(tableName, columnName);
+            if (pair == null) throw new DatabaseException("Index `" + tableName + "." + columnName + "` does not exist!");
+            return pair.getSecond().getOrder();
         }
 
         @Override
         public int getTreeHeight(String tableName, String columnName) {
-            return resolveIndexMetadataFromName(tableName, columnName).getSecond().getHeight();
+            if (aliases.containsKey(tableName)) tableName = aliases.get(tableName);
+            Pair<RecordId, BPlusTreeMetadata> pair = getColumnIndexMetadata(tableName, columnName);
+            if (pair == null) throw new DatabaseException("Index `" + tableName + "." + columnName + "` does not exist!");
+            return pair.getSecond().getHeight();
         }
 
         @Override
@@ -1088,40 +917,6 @@ public class Database implements AutoCloseable {
             return "Transaction Context for Transaction " + transNum;
         }
 
-        private Pair<String, BPlusTreeMetadata> resolveIndexMetadataFromName(String tableName,
-                String columnName) {
-            if (aliases.containsKey(tableName)) {
-                tableName = aliases.get(tableName);
-            }
-            if (columnName.contains(".")) {
-                String columnPrefix = columnName.split("\\.")[0];
-                if (!tableName.equals(columnPrefix)) {
-                    throw new DatabaseException("Column: " + columnName + " is not a column of " + tableName);
-                }
-                columnName = columnName.split("\\.")[1];
-            }
-            // remove tables. - index names do not use it
-            if (tableName.startsWith(USER_TABLE_PREFIX)) {
-                tableName = tableName.substring(tableName.indexOf(".") + 1);
-            }
-            String indexName = tableName + "," + columnName;
-
-            // Reading index metadata only requires read access
-            lockIndexMetadata(indexName, LockType.S);
-
-            BPlusTreeMetadata metadata = getIndexMetadata(tableName, columnName);
-            if (metadata == null) {
-                throw new DatabaseException("no index with name " + indexName);
-            }
-            return new Pair<>(indexName, metadata);
-        }
-
-        private Pair<String, BPlusTree> resolveIndexFromName(String tableName,
-                String columnName) {
-            String indexName = resolveIndexMetadataFromName(tableName, columnName).getFirst();
-            return new Pair<>(indexName, Database.this.indexLookup.get(indexName));
-        }
-
         @Override
         public Table getTable(String tableName) {
             if (this.aliases.containsKey(tableName)) {
@@ -1131,19 +926,11 @@ public class Database implements AutoCloseable {
             if (this.tempTables.containsKey(tableName)) {
                 return this.tempTables.get(tableName);
             }
-
-            if (!tableName.startsWith(METADATA_TABLE_PREFIX)) {
-                tableName = prefixUserTableName(tableName);
+            Pair<RecordId, TableMetadata> pair = Database.this.getTableMetadata(tableName);
+            if (pair == null) {
+                throw new DatabaseException("Table `" + tableName + "` does not exist!");
             }
-
-            // Reading table metadata only requires read access
-            lockTableMetadata(tableName, LockType.S);
-
-            TableMetadata record = getTableMetadata(tableName);
-            if (!record.isAllocated()) {
-                throw new DatabaseException("no table with name \"" + tableName + "\"");
-            }
-            return Database.this.tableLookup.get(tableName);
+            return tableFromMetadata(pair.getSecond());
         }
 
         private String prefixTempTableName(String name) {
@@ -1210,33 +997,28 @@ public class Database implements AutoCloseable {
 
         @Override
         public void createTable(Schema s, String tableName) {
-            if (tableName.contains(".") && !tableName.startsWith(USER_TABLE_PREFIX)) {
-                throw new IllegalArgumentException("name of new table may not contain '.'");
+            if (tableName.contains(".") || tableName.contains(" ") || tableName.length() == 0) {
+                throw new IllegalArgumentException("name of new table may not contain '.' or ' ', or be the empty string");
             }
-
-            String prefixedTableName = prefixUserTableName(tableName);
             TransactionContext.setTransaction(transactionContext);
             try {
-                // Creating a new table requires exclusive write access on table metadata
-                lockTableMetadata(prefixedTableName, LockType.X);
+                // To create the table we'll need exclusive access to it's metadata for the duration of the transaction
+                // This way, other transactions won't be able to access it in the event that we abort
+                LockUtil.ensureSufficientLockHeld(getTableMetadataContext(tableName), LockType.X);
 
-                TableMetadata metadata = getTableMetadata(prefixedTableName);
-                if (metadata.isAllocated()) {
-                    throw new DatabaseException("table " + prefixedTableName + " already exists");
+                // To check whether the table exists we just need to read that table's metadata, if it exists
+                Pair<RecordId, TableMetadata> pair = getTableMetadata(tableName);
+                if (pair != null) {
+                    throw new DatabaseException("table `" + tableName + "` already exists");
                 }
-
+                TableMetadata metadata = new TableMetadata(tableName);
                 metadata.partNum = diskSpaceManager.allocPart();
                 metadata.pageNum = diskSpaceManager.allocPage(metadata.partNum);
                 metadata.isTemporary = false;
                 metadata.schema = s;
-                tableInfo.updateRecord(tableInfoLookup.get(prefixedTableName), metadata.toRecord());
-
-                LockContext tableContext = getTableContext(prefixedTableName, metadata.partNum);
-                PageDirectory pageDirectory = new PageDirectory(bufferManager, metadata.partNum, metadata.pageNum,
-                                                      (short) 0, tableContext);
-                tableLookup.put(prefixedTableName, new Table(prefixedTableName, s,
-                                pageDirectory, tableContext));
-                tableIndices.put(prefixedTableName, new ArrayList<>());
+                synchronized (tableMetadata) {
+                    tableMetadata.addRecord(metadata.toRecord());
+                }
             } finally {
                 TransactionContext.unsetTransaction();
             }
@@ -1244,36 +1026,30 @@ public class Database implements AutoCloseable {
 
         @Override
         public void dropTable(String tableName) {
-            if (tableName.contains(".") && !tableName.startsWith(USER_TABLE_PREFIX)) {
-                throw new IllegalArgumentException("name of table may not contain '.': " + tableName);
+            if (tableName.contains(".") || tableName.contains(" ") || tableName.length() == 0) {
+                throw new IllegalArgumentException("name of new table may not contain '.' or ' ', or be the empty string");
             }
-
-            String prefixedTableName = prefixUserTableName(tableName);
             TransactionContext.setTransaction(transactionContext);
             try {
-                // Dropping a table requires exclusive write access on table metadata
-                lockTableMetadata(prefixedTableName, LockType.X);
-
-                TableMetadata record = getTableMetadata(prefixedTableName);
-                if (!record.isAllocated()) {
-                    throw new DatabaseException("table " + prefixedTableName + " does not exist");
+                // To check whether the table exists we just need to read that table's metadata, if it exists
+                Pair<RecordId, TableMetadata> pair = getTableMetadata(tableName);
+                if (pair == null) {
+                    throw new DatabaseException("table `" + tableName + "` already exists");
                 }
+                // To drop a table we'll need exclusive access to it's metadata and the metadata of its indices
+                LockUtil.ensureSufficientLockHeld(getTableMetadataContext(tableName), LockType.X);
+                LockUtil.ensureSufficientLockHeld(getTableIndexMetadataContext(tableName), LockType.X);
 
-                // Dropping a table requires exclusive write access on table
-                LockUtil.ensureSufficientLockHeld(getTableContext(prefixedTableName, record.partNum), LockType.X);
-
-                for (String indexName : new ArrayList<>(tableIndices.get(prefixedTableName))) {
-                    String[] parts = indexName.split(",");
-                    dropIndex(parts[0], parts[1]);
+                for (Pair<RecordId, BPlusTreeMetadata> p: getTableIndicesMetadata(tableName)) {
+                    BPlusTreeMetadata tree = p.getSecond();
+                    dropIndex(tableName, tree.getColName());
                 }
-
-                RecordId tableRecordId = tableInfoLookup.get(prefixedTableName);
-                tableInfo.updateRecord(tableRecordId,
-                        new TableMetadata(prefixedTableName).toRecord());
-
-                tableIndices.remove(prefixedTableName);
-                tableLookup.remove(prefixedTableName);
-                bufferManager.freePart(record.partNum);
+                RecordId rid = getTableMetadata(tableName).getFirst();
+                TableMetadata metadata;
+                synchronized(tableMetadata) {
+                    metadata = new TableMetadata(tableMetadata.deleteRecord(rid));
+                }
+                bufferManager.freePart(metadata.partNum);
             } finally {
                 TransactionContext.unsetTransaction();
             }
@@ -1285,15 +1061,9 @@ public class Database implements AutoCloseable {
             try {
                 // For something as drastic as dropping all tables we'll want
                 // to get an exclusive lock on the entire database.
-                LockContext dbContext = lockManager.databaseContext();
-                LockUtil.ensureSufficientLockHeld(dbContext, LockType.X);
-
-                List<String> tableNames = new ArrayList<>(tableLookup.keySet());
-
-                for (String s : tableNames) {
-                    if (s.startsWith(USER_TABLE_PREFIX)) {
-                        this.dropTable(s);
-                    }
+                LockUtil.ensureSufficientLockHeld(lockManager.databaseContext(), LockType.X);
+                for (Pair<RecordId, TableMetadata> p: scanTableMetadata()) {
+                    dropTable(p.getSecond().tableName);
                 }
             } finally {
                 TransactionContext.unsetTransaction();
@@ -1302,18 +1072,14 @@ public class Database implements AutoCloseable {
 
         @Override
         public void createIndex(String tableName, String columnName, boolean bulkLoad) {
-            if (tableName.contains(".") && !tableName.startsWith(USER_TABLE_PREFIX)) {
-                throw new IllegalArgumentException("name of table may not contain '.'");
+            if (tableName.contains(".") || tableName.contains(" ") || tableName.length() == 0) {
+                throw new IllegalArgumentException("name of new table may not contain '.' or ' ', or be the empty string");
             }
-            String prefixedTableName = prefixUserTableName(tableName);
             TransactionContext.setTransaction(transactionContext);
             try {
-                // We want to hold an S lock on the table to make sure other
-                // users don't update the table while we're building our index
-                lockTableMetadata(prefixedTableName, LockType.S);
-
-                TableMetadata tableMetadata = getTableMetadata(prefixedTableName);
-                if (!tableMetadata.isAllocated()) {
+                // We want to check that the table exists
+                TableMetadata tableMetadata = getTableMetadata(tableName).getSecond();
+                if (tableMetadata == null) {
                     throw new DatabaseException("table " + tableName + " does not exist");
                 }
 
@@ -1326,37 +1092,32 @@ public class Database implements AutoCloseable {
 
                 int columnIndex = schemaColNames.indexOf(columnName);
                 Type colType = schemaColType.get(columnIndex);
-                String indexName = tableName + "," + columnName;
 
-                // Get an exclusive lock on the index while we create it
-                lockIndexMetadata(indexName, LockType.X);
-
-                BPlusTreeMetadata metadata = getIndexMetadata(tableName, columnName);
-                if (metadata != null) {
+                // To create the index we'll need an exclusive lock on its metadata
+                LockUtil.ensureSufficientLockHeld(getColumnIndexMetadataContext(tableName, columnName), LockType.X);
+                Pair<RecordId, BPlusTreeMetadata> pair = getColumnIndexMetadata(tableName, columnName);
+                if (pair != null) {
                     throw new DatabaseException("index already exists on " + tableName + "(" + columnName + ")");
                 }
 
                 int order = BPlusTree.maxOrder(BufferManager.EFFECTIVE_PAGE_SIZE, colType);
                 Record indexEntry = new Record(tableName, columnName, order,
                         diskSpaceManager.allocPart(),
-                        DiskSpaceManager.INVALID_PAGE_NUM,
+                        diskSpaceManager.INVALID_PAGE_NUM,
                         colType.getTypeId().ordinal(),
                         colType.getSizeInBytes(), -1
                 );
-                indexInfo.updateRecord(indexInfoLookup.get(indexName), indexEntry);
-                metadata = parseIndexMetadata(indexEntry);
-                assert (metadata != null);
-
-                LockContext indexContext = getIndexContext(indexName, metadata.getPartNum());
-                indexLookup.put(indexName, new BPlusTree(bufferManager, metadata, indexContext));
-                tableIndices.get(prefixedTableName).add(indexName);
+                synchronized (indexMetadata) {
+                    indexMetadata.addRecord(indexEntry);
+                }
+                BPlusTreeMetadata metadata = new BPlusTreeMetadata(indexEntry);
+                BPlusTree tree = indexFromMetadata(metadata);
 
                 // load data into index
-                Table table = tableLookup.get(prefixedTableName);
-                BPlusTree tree = indexLookup.get(indexName);
                 if (bulkLoad) {
                     throw new UnsupportedOperationException("not implemented");
                 } else {
+                    Table table = tableFromMetadata(tableMetadata);
                     for (RecordId rid : (Iterable<RecordId>) table::ridIterator) {
                         Record record = table.getRecord(rid);
                         tree.put(record.getValue(columnIndex), rid);
@@ -1369,27 +1130,16 @@ public class Database implements AutoCloseable {
 
         @Override
         public void dropIndex(String tableName, String columnName) {
-            String indexName = tableName + "," + columnName;
             TransactionContext.setTransaction(transactionContext);
             try {
                 // We need exclusive write access on an index to drop it.
-                lockIndexMetadata(indexName, LockType.X);
-
-                BPlusTreeMetadata metadata = getIndexMetadata(tableName, columnName);
-                if (metadata == null) {
+                LockUtil.ensureSufficientLockHeld(getColumnIndexMetadataContext(tableName, columnName), LockType.X);
+                Pair<RecordId, BPlusTreeMetadata> pair = getColumnIndexMetadata(tableName, columnName);
+                if (pair == null) {
                     throw new DatabaseException("no index on " + tableName + "(" + columnName + ")");
                 }
-                Record invalidatedEntry = new Record(tableName, columnName, -1,
-                        -1, DiskSpaceManager.INVALID_PAGE_NUM,
-                        TypeId.INT.ordinal(), 4, -1);
-                indexInfo.updateRecord(indexInfoLookup.get(indexName), invalidatedEntry);
-
-                // We'll need exclusive access on the partition the index resides
-                // on to drop it.
-                LockUtil.ensureSufficientLockHeld(getIndexContext(indexName, metadata.getPartNum()), LockType.X);
-
-                bufferManager.freePart(metadata.getPartNum());
-                indexLookup.remove(indexName);
+                indexMetadata.deleteRecord(pair.getFirst());
+                bufferManager.freePart(pair.getSecond().getPartNum());
             } finally {
                 TransactionContext.unsetTransaction();
             }

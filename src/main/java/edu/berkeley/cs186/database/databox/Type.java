@@ -60,6 +60,10 @@ public class Type {
         return new Type(TypeId.LONG, Long.BYTES);
     }
 
+    public static Type byteArrayType(int n) {
+        return new Type(TypeId.BYTE_ARRAY, n);
+    }
+
     public TypeId getTypeId() {
         return typeId;
     }
@@ -100,6 +104,8 @@ public class Type {
         case LONG:
             assert(sizeInBytes == Long.BYTES);
             return Type.longType();
+        case BYTE_ARRAY:
+            return Type.byteArrayType(sizeInBytes);
         default:
             throw new RuntimeException("unreachable");
         }

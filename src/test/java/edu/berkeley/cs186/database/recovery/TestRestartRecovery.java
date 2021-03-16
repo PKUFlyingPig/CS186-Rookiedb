@@ -896,7 +896,7 @@ public class TestRestartRecovery {
      */
     protected RecoveryManager loadRecoveryManager(String dir) throws Exception {
         RecoveryManager recoveryManager = new ARIESRecoveryManagerNoLocking(
-                new DummyLockContext(new Pair<>("database", 0L)), DummyTransaction::create);
+                new DummyLockContext("database"), DummyTransaction::create);
         DiskSpaceManager diskSpaceManager = new DiskSpaceManagerImpl(dir, recoveryManager);
         BufferManager bufferManager = new BufferManager(diskSpaceManager, recoveryManager, 32,
                 new LRUEvictionPolicy());

@@ -21,7 +21,9 @@ public class LockUtil {
      * - The current lock type can effectively substitute the requested type
      * - The current lock type is IX and the requested lock is S
      * - The current lock type is an intent lock
-     * - None of the above
+     * - None of the above: In this case, consider what values the explicit
+     *   lock type can be, and think about how ancestor looks will need to be
+     *   acquired or changed.
      *
      * You may find it useful to create a helper method that ensures you have
      * the appropriate locks on all ancestors.

@@ -1444,9 +1444,9 @@ public class ExtraNLJTests {
         this.rightSourceOperator = rightSourceOperator;
 
         // hard-coded mess, but works as long as the first two tables created are the source operators
-        pinPage(1, 0); // information_schema.tables header page
-        pinPage(1, 3); // information_schema.tables entry for left source
-        pinPage(1, 4); // information_schema.tables entry for right source
+        pinPage(1, 0); // _metadata.tables header page
+        pinPage(1, 1); // _metadata.tables entry for left source
+        pinPage(1, 2); // _metadata.tables entry for right source
         pinPage(3, 0); // left source header page
         pinPage(4, 0); // right source header page
     }

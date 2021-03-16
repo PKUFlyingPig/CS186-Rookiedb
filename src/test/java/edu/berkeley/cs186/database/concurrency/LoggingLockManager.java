@@ -11,13 +11,13 @@ public class LoggingLockManager extends LockManager {
     private boolean logging = false;
     private boolean suppressInternal = true;
     private boolean suppressStatus = false;
-    private Map<Long, LockContext> contexts = new HashMap<>();
+    private Map<String, LockContext> contexts = new HashMap<>();
     private Map<Long, Boolean> loggingOverride = new ConcurrentHashMap<>();
 
     @Override
-    public synchronized LockContext context(String readable, long name) {
+    public synchronized LockContext context(String name) {
         if (!contexts.containsKey(name)) {
-            contexts.put(name, new LoggingLockContext(this, null, new Pair<>(readable, name)));
+            contexts.put(name, new LoggingLockContext(this, null, name));
         }
         return contexts.get(name);
     }

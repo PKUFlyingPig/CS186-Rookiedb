@@ -43,7 +43,6 @@ public class TestOptimizationJoins {
         String filename = testDir.getAbsolutePath();
         this.db = new Database(filename, 32);
         this.db.setWorkMem(5); // B=5
-        this.db.waitSetupFinished();
         try(Transaction t = this.db.beginTransaction()) {
             Schema schema = TestUtils.createSchemaWithAllTypes();
             t.dropAllTables();

@@ -6,6 +6,7 @@ import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.DummyLockContext;
 import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
+import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.query.disk.Run;
 import edu.berkeley.cs186.database.table.Schema;
@@ -29,12 +30,13 @@ import static org.junit.Assert.*;
 public class TestSortOperator {
     private Database d;
     private Page metadataHeader;
+    private Page indexHeader;
     private long numIOs;
 
     // 1 extra I/O on first access to a table after evictAll
     public static long FIRST_ACCESS_IOS = 1;
-    // 2 extra I/Os to create a run, 1 for metadata and 1 to create a header page
-    public static long NEW_RUN_IOS = 2;
+    // 1 I/O to create a header page
+    public static long NEW_RUN_IOS = 1;
 
     @Rule
     public TemporaryFolder tempFolder = new TemporaryFolder();
@@ -66,12 +68,15 @@ public class TestSortOperator {
         d.waitAllTransactions();
         long pageNum = DiskSpaceManager.getVirtualPageNum(1, 0);
         metadataHeader = d.getBufferManager().fetchPage(new DummyLockContext(), pageNum);
+        pageNum = DiskSpaceManager.getVirtualPageNum(2, 0);
+        indexHeader = d.getBufferManager().fetchPage(new DummyLockContext(), pageNum);
     }
 
     @After
     public void cleanup() {
         d.waitAllTransactions();
         metadataHeader.unpin();
+        indexHeader.unpin();
         d.close();
     }
 

@@ -74,7 +74,7 @@ public class BPlusTree {
      * maximally full B+ tree nodes, then use the BPlusTree.maxOrder function
      * to get the appropriate order.
      *
-     * We additionally write a row to the information_schema.indices table with metadata about
+     * We additionally write a row to the _metadata.indices table with metadata about
      * the B+ tree:
      *
      *   - the name of the tree (table associated with it and column it indexes)
@@ -88,8 +88,8 @@ public class BPlusTree {
     public BPlusTree(BufferManager bufferManager, BPlusTreeMetadata metadata, LockContext lockContext) {
         // Prevent child locks - we only lock the entire tree as a whole.
         lockContext.disableChildLocks();
-        // TODO(proj4_integration): Update the following line
-        LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
+        // By default we want to read the whole tree
+        LockUtil.ensureSufficientLockHeld(lockContext, LockType.S);
 
         // Sanity checks.
         if (metadata.getOrder() < 0) {
@@ -113,9 +113,12 @@ public class BPlusTree {
         this.metadata = metadata;
 
         if (this.metadata.getRootPageNum() != DiskSpaceManager.INVALID_PAGE_NUM) {
-            this.updateRoot(BPlusNode.fromBytes(this.metadata, bufferManager, lockContext,
-                    this.metadata.getRootPageNum()));
+            this.root = BPlusNode.fromBytes(this.metadata, bufferManager, lockContext,
+                    this.metadata.getRootPageNum());
         } else {
+            // We're creating the root, which means we need exclusive access
+            // on the tree
+            LockUtil.ensureSufficientLockHeld(lockContext, LockType.X);
             // Construct the root.
             List<DataBox> keys = new ArrayList<>();
             List<RecordId> rids = new ArrayList<>();
@@ -372,6 +375,10 @@ public class BPlusTree {
         } catch (InterruptedException e) {
             throw new BPlusTreeException(e.getMessage());
         }
+    }
+
+    public BPlusTreeMetadata getMetadata() {
+        return this.metadata;
     }
 
     /**

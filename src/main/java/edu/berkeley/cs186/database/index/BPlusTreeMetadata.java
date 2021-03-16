@@ -1,6 +1,7 @@
 package edu.berkeley.cs186.database.index;
 
 import edu.berkeley.cs186.database.databox.Type;
+import edu.berkeley.cs186.database.databox.TypeId;
 import edu.berkeley.cs186.database.table.Record;
 
 /** Metadata about a B+ tree. */
@@ -43,8 +44,16 @@ public class BPlusTreeMetadata {
         this.height = height;
     }
 
-    public BPlusTreeMetadata(String tableName, String colName) {
-        this(tableName, colName, Type.intType(), -1, -1, -1, -1);
+    public BPlusTreeMetadata(Record record) {
+        this.tableName = record.getValue(0).getString();
+        this.colName = record.getValue(1).getString();
+        this.order = record.getValue(2).getInt();
+        this.partNum = record.getValue(3).getInt();
+        this.rootPageNum = record.getValue(4).getLong();
+        this.height = record.getValue(7).getInt();
+        int typeIdIndex = record.getValue(5).getInt();
+        int typeSize = record.getValue(6).getInt();
+        this.keySchema = new Type(TypeId.values()[typeIdIndex], typeSize);
     }
 
     /**

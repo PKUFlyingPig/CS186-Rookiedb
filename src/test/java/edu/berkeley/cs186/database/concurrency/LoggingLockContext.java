@@ -9,11 +9,11 @@ public class LoggingLockContext extends LockContext {
      * A special LockContext that works with a LoggingLockManager to emit logs
      * when the user uses disableChildLocks().
      */
-    LoggingLockContext(LoggingLockManager lockman, LockContext parent, Pair<String, Long> name) {
+    LoggingLockContext(LoggingLockManager lockman, LockContext parent, String name) {
         super(lockman, parent, name);
     }
 
-    private LoggingLockContext(LoggingLockManager lockman, LockContext parent, Pair<String, Long> name,
+    private LoggingLockContext(LoggingLockManager lockman, LockContext parent, String name,
                                boolean readonly) {
         super(lockman, parent, name, readonly);
     }
@@ -37,9 +37,8 @@ public class LoggingLockContext extends LockContext {
      * Gets the context for the child with name NAME (with a readable version READABLE).
      */
     @Override
-    public synchronized LockContext childContext(String readable, long name) {
-        LockContext temp = new LoggingLockContext((LoggingLockManager) lockman, this, new Pair<>(readable,
-                name),
+    public synchronized LockContext childContext(String name) {
+        LockContext temp = new LoggingLockContext((LoggingLockManager) lockman, this, name,
                 this.childLocksDisabled || this.readonly);
         LockContext child = this.children.putIfAbsent(name, temp);
         if (child == null) {

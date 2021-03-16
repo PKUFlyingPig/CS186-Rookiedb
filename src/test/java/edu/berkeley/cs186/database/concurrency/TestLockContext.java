@@ -45,8 +45,8 @@ public class TestLockContext {
          *                      page1
          */
         dbLockContext = lockManager.databaseContext();
-        tableLockContext = dbLockContext.childContext("table1", 1);
-        pageLockContext = tableLockContext.childContext("page1", 1);
+        tableLockContext = dbLockContext.childContext("table1");
+        pageLockContext = tableLockContext.childContext("page1");
 
         transactions = new TransactionContext[8];
         for (int i = 0; i < transactions.length; i++) {
@@ -302,8 +302,8 @@ public class TestLockContext {
 
         LockContext r0 = dbLockContext;
         LockContext r1 = tableLockContext;
-        LockContext r2 = dbLockContext.childContext("table2", 2);
-        LockContext r3 = dbLockContext.childContext("table3", 3);
+        LockContext r2 = dbLockContext.childContext("table2");
+        LockContext r3 = dbLockContext.childContext("table3");
 
         r0.acquire(t1, LockType.IS);
         r1.acquire(t1, LockType.S);
@@ -356,7 +356,7 @@ public class TestLockContext {
     @Category(PublicTests.class)
     public void testReadonly() {
         dbLockContext.disableChildLocks();
-        LockContext tableContext = dbLockContext.childContext("table2", 2);
+        LockContext tableContext = dbLockContext.childContext("table2");
         TransactionContext t1 = transactions[1];
         dbLockContext.acquire(t1, LockType.IX);
         try {
@@ -388,7 +388,7 @@ public class TestLockContext {
     @Test
     @Category(PublicTests.class)
     public void testGetNumChildren() {
-        LockContext tableContext = dbLockContext.childContext("table2", 2);
+        LockContext tableContext = dbLockContext.childContext("table2");
         TransactionContext t1 = transactions[1];
         dbLockContext.acquire(t1, LockType.IX);
         tableContext.acquire(t1, LockType.IS);

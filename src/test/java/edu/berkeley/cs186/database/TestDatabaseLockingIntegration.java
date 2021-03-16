@@ -22,7 +22,9 @@ import static org.junit.Assert.*;
 
 /**
  * These tests are sanity checks to make sure that code you bring in from
- * previous projects integrates correctly with the logic implementation.
+ * previous projects integrates correctly with the locking implementation, if
+ * you choose to do so. These tests are *not graded* and are not a part of your
+ * project 4 submission.
  */
 @Category({Proj4IntegrationTests.class})
 public class TestDatabaseLockingIntegration {
@@ -59,7 +61,6 @@ public class TestDatabaseLockingIntegration {
         this.db = new Database(this.filename, 128, this.lockManager);
         this.db.setWorkMem(32); // B=32
         // force initialization to finish before continuing
-        this.db.waitSetupFinished();
         this.db.waitAllTransactions();
     }
 
@@ -149,10 +150,10 @@ public class TestDatabaseLockingIntegration {
 
     private static List<String> removeMetadataLogs(List<String> log) {
         log = new ArrayList<>(log);
-        // remove all information_schema lock log entries
-        log.removeIf((String x) -> x.contains("information_schema"));
+        // remove all _metadata lock log entries
+        log.removeIf((String x) -> x.contains("_metadata"));
         // replace [acquire IS(database), promote IX(database), ...] with [acquire IX(database), ...]
-        // (as if the information_schema locks never happened)
+        // (as if the _metadata locks never happened)
         if (log.size() >= 2 && log.get(0).endsWith("database IS") && log.get(1).endsWith("database IX")) {
             log.set(0, log.get(0).replace("IS", "IX"));
             log.remove(1);
@@ -215,7 +216,7 @@ public class TestDatabaseLockingIntegration {
 
             assertEquals(prepare(t1.getTransNum(),
                     "acquire %s database IS",
-                    "acquire %s database/tables.testTable1 S"
+                    "acquire %s database/testtable1 S"
             ), removeMetadataLogs(lockManager.log));
         }
     }
@@ -236,7 +237,7 @@ public class TestDatabaseLockingIntegration {
 
             assertEquals(prepare(t1.getTransNum(),
                     "acquire %s database IS",
-                    "acquire %s database/tables.testTable1 S"
+                    "acquire %s database/testtable1 S"
             ), removeMetadataLogs(lockManager.log).subList(0, 2));
         }
     }
@@ -247,7 +248,7 @@ public class TestDatabaseLockingIntegration {
         String tableName = "testTable1";
         lockManager.startLog();
         createTableWithIndices(tableName, 0, Collections.singletonList("int1"));
-        assertTrue(lockManager.log.contains("disable-children database/indices.testTable1,int1"));
+        assertTrue(lockManager.log.contains("disable-children database/testtable1.int1"));
     }
 
     @Test
@@ -263,11 +264,10 @@ public class TestDatabaseLockingIntegration {
                 r.next();
             }
             List<String> log = removeMetadataLogs(lockManager.log);
-            assertEquals(3, log.size());
-            assertEquals(prepare(t1.getTransNum(),
+            assertContainsAll(prepare(t1.getTransNum(),
                     "acquire %s database IS",
-                    "acquire %s database/tables.testTable1 S",
-                    "acquire %s database/indices.testTable1,int1 S"
+                    "acquire %s database/testtable1 S",
+                    "acquire %s database/testtable1.int1 S"
             ), log);
         } finally {
             this.db.waitAllTransactions();
@@ -281,11 +281,10 @@ public class TestDatabaseLockingIntegration {
                 r.next();
             }
             List<String> log = removeMetadataLogs(lockManager.log);
-            assertEquals(3, log.size());
-            assertEquals(prepare(t2.getTransNum(),
+            assertContainsAll(prepare(t2.getTransNum(),
                     "acquire %s database IS",
-                    "acquire %s database/tables.testTable1 S",
-                    "acquire %s database/indices.testTable1,int2 S"
+                    "acquire %s database/testtable1 S",
+                    "acquire %s database/testtable1.int2 S"
             ), log);
         }
     }
@@ -299,10 +298,10 @@ public class TestDatabaseLockingIntegration {
         lockManager.startLog();
         try(Transaction t1 = beginTransaction()) {
             t1.getTransactionContext().lookupKey(tableName, "int1", new IntDataBox(rids.size() / 2));
-            assertEquals(prepare(t1.getTransNum(),
+            assertContainsAll(prepare(t1.getTransNum(),
                     "acquire %s database IS",
-                    "acquire %s database/indices.testTable1,int1 S",
-                    "acquire 4 database/tables.testTable1 S"
+                    "acquire %s database/testtable1.int1 S",
+                    "acquire %s database/testtable1 S"
             ), removeMetadataLogs(lockManager.log));
         } finally {
             this.db.waitAllTransactions();
@@ -311,9 +310,9 @@ public class TestDatabaseLockingIntegration {
         lockManager.clearLog();
         try(Transaction t2 = beginTransaction()) {
             t2.getTransactionContext().contains(tableName, "int2", new IntDataBox(rids.size() / 2 - 1));
-            assertEquals(prepare(t2.getTransNum(),
+            assertContainsAll(prepare(t2.getTransNum(),
                     "acquire %s database IS",
-                    "acquire %s database/indices.testTable1,int2 S"
+                    "acquire %s database/testtable1.int2 S"
             ), removeMetadataLogs(lockManager.log));
         }
     }
@@ -337,91 +336,11 @@ public class TestDatabaseLockingIntegration {
             q.project(Collections.singletonList("int2"));
             q.execute();
 
-            assertEquals(prepare(t0.getTransNum(),
+            assertContainsAll(prepare(t0.getTransNum(),
                     "acquire %s database IS",
-                    "acquire %s database/indices.testTable1,int1 S",
-                    "acquire 5 database/tables.testTable1 S"
+                    "acquire %s database/testtable1 S",
+                    "acquire %s database/testtable1.int1 S"
             ), removeMetadataLogs(lockManager.log));
-        }
-    }
-
-    @Test
-    @Category(PublicTests.class)
-    public void testLockTableMetadata() {
-        createTable("testTable1", 4);
-
-        lockManager.startLog();
-
-        try(Transaction t = beginTransaction()) {
-            TransactionContext.setTransaction(t.getTransactionContext());
-
-            db.lockTableMetadata("tables.testTable1", LockType.S);
-
-            assertEquals(prepare(t.getTransNum(),
-                    "acquire %s database IS",
-                    "acquire %s database/information_schema.tables IS",
-                    "acquire %s database/information_schema.tables/10000000003 S"
-            ), lockManager.log);
-
-            TransactionContext.unsetTransaction();
-        }
-
-        db.waitAllTransactions();
-        lockManager.clearLog();
-        lockManager.startLog();
-
-        try(Transaction t = beginTransaction()) {
-            TransactionContext.setTransaction(t.getTransactionContext());
-
-            db.lockTableMetadata("tables.testTable1", LockType.X);
-
-            assertEquals(prepare(t.getTransNum(),
-                    "acquire %s database IX",
-                    "acquire %s database/information_schema.tables IX",
-                    "acquire %s database/information_schema.tables/10000000003 X"
-            ), lockManager.log);
-
-            TransactionContext.unsetTransaction();
-        }
-    }
-
-    @Test
-    @Category(PublicTests.class)
-    public void testLockIndexMetadata() {
-        createTableWithIndices("testTable1", 4, Collections.singletonList("int1"));
-
-        lockManager.startLog();
-
-        try(Transaction t = beginTransaction()) {
-            TransactionContext.setTransaction(t.getTransactionContext());
-
-            db.lockIndexMetadata("testTable1,int1", LockType.S);
-
-            assertEquals(prepare(t.getTransNum(),
-                    "acquire %s database IS",
-                    "acquire %s database/information_schema.indices IS",
-                    "acquire %s database/information_schema.indices/20000000001 S"
-            ), lockManager.log);
-
-            TransactionContext.unsetTransaction();
-        }
-
-        db.waitAllTransactions();
-        lockManager.clearLog();
-        lockManager.startLog();
-
-        try(Transaction t = beginTransaction()) {
-            TransactionContext.setTransaction(t.getTransactionContext());
-
-            db.lockIndexMetadata("testTable1,int1", LockType.X);
-
-            assertEquals(prepare(t.getTransNum(),
-                    "acquire %s database IX",
-                    "acquire %s database/information_schema.indices IX",
-                    "acquire %s database/information_schema.indices/20000000001 X"
-            ), lockManager.log);
-
-            TransactionContext.unsetTransaction();
         }
     }
 
@@ -437,9 +356,9 @@ public class TestDatabaseLockingIntegration {
             } catch (DatabaseException e) { /* do nothing */ }
 
             assertEquals(prepare(t.getTransNum(),
-                    "acquire %s database IX",
-                    "acquire %s database/information_schema.tables IX",
-                    "acquire %s database/information_schema.tables/10000000003 X"
+                    "acquire %s database IS",
+                    "acquire %s database/_metadata.tables IS",
+                    "acquire %s database/_metadata.tables/badtable S"
             ), lockManager.log);
         }
     }
@@ -460,9 +379,8 @@ public class TestDatabaseLockingIntegration {
         try(Transaction t = beginTransaction()) {
             assertSubsequence(prepare(t.getTransNum() - 1,
                     "acquire %s database IX",
-                    "acquire %s database/information_schema.tables IX",
-                    "acquire %s database/information_schema.tables/10000000003 X",
-                    "acquire %s database/tables.testTable1 X"
+                    "acquire %s database/_metadata.tables IX",
+                    "acquire %s database/_metadata.tables/testtable1 X"
             ), lockManager.log);
         }
     }
@@ -484,11 +402,12 @@ public class TestDatabaseLockingIntegration {
         try(Transaction t = beginTransaction()) {
             t.createIndex("testTable1", "int1", false);
             assertSubsequence(prepare(t.getTransNum(),
-                    "acquire %s database/information_schema.tables IS",
-                    "acquire %s database/information_schema.tables/10000000003 S",
-                    "acquire %s database/information_schema.indices IX",
-                    "acquire %s database/information_schema.indices/20000000001 X",
-                    "acquire %s database/indices.testTable1,int1 X"
+                    "acquire %s database/_metadata.tables IS",
+                    "acquire %s database/_metadata.tables/testtable1 S",
+                    "acquire %s database/_metadata.indices IX",
+                    "acquire %s database/_metadata.indices/testtable1 IX",
+                    "acquire %s database/_metadata.indices/testtable1/int1 X",
+                    "promote %s database/testtable1.int1 X"
             ), lockManager.log);
         }
     }
@@ -504,11 +423,15 @@ public class TestDatabaseLockingIntegration {
         try(Transaction t0 = beginTransaction()) {
             t0.dropTable(tableName);
 
-            assertEquals(prepare(t0.getTransNum(),
-                    "acquire %s database IX",
-                    "acquire %s database/information_schema.tables IX",
-                    "acquire %s database/information_schema.tables/10000000003 X",
-                    "acquire %s database/tables.testTable1 X"
+            assertContainsAll(prepare(t0.getTransNum(),
+                    "acquire %s database IS",
+                    "acquire %s database/_metadata.tables IS",
+                    "acquire %s database/_metadata.tables/testtable1 S",
+                    "promote %s database IX",
+                    "promote %s database/_metadata.tables IX",
+                    "promote %s database/_metadata.tables/testtable1 X",
+                    "acquire %s database/_metadata.indices IX",
+                    "acquire %s database/_metadata.indices/testtable1 X"
             ), lockManager.log);
         }
     }
@@ -525,9 +448,9 @@ public class TestDatabaseLockingIntegration {
 
             assertSubsequence(prepare(t0.getTransNum(),
                     "acquire %s database IX",
-                    "acquire %s database/information_schema.indices IX",
-                    "acquire %s database/information_schema.indices/20000000001 X",
-                    "acquire %s database/indices.testTable1,int1 X"
+                    "acquire %s database/_metadata.indices IX",
+                    "acquire %s database/_metadata.indices/testtable1 IX",
+                    "acquire %s database/_metadata.indices/testtable1/int1 X"
             ), lockManager.log);
         }
     }

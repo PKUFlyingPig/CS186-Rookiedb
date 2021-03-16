@@ -44,7 +44,7 @@ public class TestLockUtil {
         lockManager = new LoggingLockManager();
         transaction = new DummyTransactionContext(lockManager, 0);
         dbContext = lockManager.databaseContext();
-        tableContext = dbContext.childContext("table1", 1);
+        tableContext = dbContext.childContext("table1");
         pageContexts = new LockContext[8];
         for (int i = 0; i < pageContexts.length; ++i) {
             pageContexts[i] = tableContext.childContext((long) i);

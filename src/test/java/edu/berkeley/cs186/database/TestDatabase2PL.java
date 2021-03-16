@@ -54,7 +54,6 @@ public class TestDatabase2PL {
         this.db = new Database(this.filename, 128, this.lockManager);
         this.db.setWorkMem(32); // B=32
         // force initialization to finish before continuing
-        this.db.waitSetupFinished();
         this.db.waitAllTransactions();
     }
 
@@ -68,8 +67,7 @@ public class TestDatabase2PL {
 
     @Before
     public void beforeEach() throws Exception {
-        assertTrue(passedPreCheck);
-
+        assertTrue("You will need to pass the test in testDatabaseDeadLockPrecheck before running these tests", passedPreCheck);
         File testDir = tempFolder.newFolder(TestDir);
         this.filename = testDir.getAbsolutePath();
         this.reloadDatabase();
@@ -135,10 +133,10 @@ public class TestDatabase2PL {
 
     private static List<String> removeMetadataLogs(List<String> log) {
         log = new ArrayList<>(log);
-        // remove all information_schema lock log entries
-        log.removeIf((String x) -> x.contains("information_schema"));
+        // remove all _metadata lock log entries
+        log.removeIf((String x) -> x.contains("_metadata"));
         // replace [acquire IS(database), promote IX(database), ...] with [acquire IX(database), ...]
-        // (as if the information_schema locks never happened)
+        // (as if the _metadata locks never happened)
         if (log.size() >= 2 && log.get(0).endsWith("database IS") && log.get(1).endsWith("database IX")) {
             log.set(0, log.get(0).replace("IS", "IX"));
             log.remove(1);
@@ -171,16 +169,18 @@ public class TestDatabase2PL {
         lockManager.startLog();
 
         try(Transaction t1 = beginTransaction()) {
+            // Read first record
             t1.getTransactionContext().getRecord(tableName, rids.get(0));
+            // Read record on 3rd data page
             t1.getTransactionContext().getRecord(tableName, rids.get(3 * rids.size() / 4 - 1));
+            // Read last record
             t1.getTransactionContext().getRecord(tableName, rids.get(rids.size() - 1));
-
             assertEquals(prepare(t1.getTransNum(),
                     "acquire %s database IS",
-                    "acquire %s database/tables.testTable1 IS",
-                    "acquire %s database/tables.testTable1/30000000001 S",
-                    "acquire %s database/tables.testTable1/30000000003 S",
-                    "acquire %s database/tables.testTable1/30000000004 S"
+                    "acquire %s database/testtable1 IS",
+                    "acquire %s database/testtable1/30000000001 S",
+                    "acquire %s database/testtable1/30000000003 S",
+                    "acquire %s database/testtable1/30000000004 S"
             ), removeMetadataLogs(lockManager.log));
         }
     }
@@ -193,10 +193,14 @@ public class TestDatabase2PL {
 
         Transaction t1 = beginTransaction();
         try {
+            // Read record on first page
             t1.getTransactionContext().getRecord(tableName, rids.get(0));
+            // Read record on third page
             t1.getTransactionContext().getRecord(tableName, rids.get(3 * rids.size() / 4 - 1));
+            // Read record on last page
             t1.getTransactionContext().getRecord(tableName, rids.get(rids.size() - 1));
 
+            // Should have IS(db), IS(db/testtable1), and 3 S locks on pages
             assertTrue("did not acquire all required locks",
                     lockManager.getLocks(t1.getTransactionContext()).size() >= 5);
 
@@ -206,10 +210,11 @@ public class TestDatabase2PL {
             this.db.waitAllTransactions();
         }
 
+        // After committing the transaction should release all locks
         assertTrue("did not free all required locks",
                 lockManager.getLocks(t1.getTransactionContext()).isEmpty());
         assertSubsequence(prepare(t1.getTransNum(),
-                "release %s database/tables.testTable1/30000000003",
+                "release %s database/testtable1/30000000003",
                 "release %s database"
         ), lockManager.log);
     }
@@ -231,11 +236,42 @@ public class TestDatabase2PL {
 
         try(Transaction t1 = beginTransaction()) {
             t1.insert(tableName, input);
-
+            // Insert a new record onto the last page of the table
             assertEquals(prepare(t1.getTransNum(),
                     "acquire %s database IX",
-                    "acquire %s database/tables.testTable1 IX",
-                    "acquire %s database/tables.testTable1/30000000004 X"
+                    "acquire %s database/testtable1 IX",
+                    "acquire %s database/testtable1/30000000004 X"
+            ), removeMetadataLogs(lockManager.log));
+        }
+    }
+
+    @Test
+    @Category(PublicTests.class)
+    public void testRecordReadWrite() {
+        String tableName = "testTable1";
+        List<RecordId> rids = createTable(tableName, 4);
+        Record input = TestUtils.createRecordWithAllTypes();
+
+        try(Transaction t0 = beginTransaction()) {
+            t0.getTransactionContext().deleteRecord(tableName, rids.get(rids.size() - 1));
+        } finally {
+            this.db.waitAllTransactions();
+        }
+
+        lockManager.startLog();
+        try(Transaction t1 = beginTransaction()) {
+            // Read the first record
+            t1.getTransactionContext().getRecord(tableName, rids.get(0));
+            // Insert a new record onto the last page
+            t1.insert(tableName, input);
+
+            assertEquals(prepare(t1.getTransNum(),
+                    "acquire %s database IS",
+                    "acquire %s database/testtable1 IS",
+                    "acquire %s database/testtable1/30000000001 S",
+                    "promote %s database IX",
+                    "promote %s database/testtable1 IX",
+                    "acquire %s database/testtable1/30000000004 X"
             ), removeMetadataLogs(lockManager.log));
         }
     }
@@ -250,12 +286,13 @@ public class TestDatabase2PL {
         lockManager.startLog();
 
         try(Transaction t1 = beginTransaction()) {
+            // Update the last record in the table
             t1.getTransactionContext().updateRecord(tableName, rids.get(rids.size() - 1), input);
 
             assertEquals(prepare(t1.getTransNum(),
                     "acquire %s database IX",
-                    "acquire %s database/tables.testTable1 IX",
-                    "acquire %s database/tables.testTable1/30000000004 X"
+                    "acquire %s database/testtable1 IX",
+                    "acquire %s database/testtable1/30000000004 X"
             ), removeMetadataLogs(lockManager.log));
         }
     }
@@ -269,12 +306,12 @@ public class TestDatabase2PL {
         lockManager.startLog();
 
         try(Transaction t1 = beginTransaction()) {
+            // Delete the last record in the table
             t1.getTransactionContext().deleteRecord(tableName, rids.get(rids.size() - 1));
-
             assertEquals(prepare(t1.getTransNum(),
                     "acquire %s database IX",
-                    "acquire %s database/tables.testTable1 IX",
-                    "acquire %s database/tables.testTable1/30000000004 X"
+                    "acquire %s database/testtable1 IX",
+                    "acquire %s database/testtable1/30000000004 X"
             ), removeMetadataLogs(lockManager.log));
         }
     }

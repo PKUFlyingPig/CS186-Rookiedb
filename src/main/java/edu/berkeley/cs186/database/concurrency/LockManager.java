@@ -49,7 +49,7 @@ public class LockManager {
         // Queue for yet-to-be-satisfied lock requests on this resource.
         Deque<LockRequest> waitingQueue = new ArrayDeque<>();
 
-        // Below are a list of helper methods we recommend you implement.
+        // Below are a list of helper methods we suggest you implement.
         // You're free to modify their type signatures, delete, or ignore them.
 
         /**
@@ -119,7 +119,7 @@ public class LockManager {
     }
 
     // You should not modify or use this directly.
-    private Map<Long, LockContext> contexts = new HashMap<>();
+    private Map<String, LockContext> contexts = new HashMap<>();
 
     /**
      * Helper method to fetch the resourceEntry corresponding to `name`.
@@ -278,9 +278,9 @@ public class LockManager {
      * Creates a lock context. See comments at the top of this file and the top
      * of LockContext.java for more information.
      */
-    public synchronized LockContext context(String readable, long name) {
+    public synchronized LockContext context(String name) {
         if (!contexts.containsKey(name)) {
-            contexts.put(name, new LockContext(this, null, new Pair<>(readable, name)));
+            contexts.put(name, new LockContext(this, null, name));
         }
         return contexts.get(name);
     }
@@ -290,6 +290,6 @@ public class LockManager {
      * file and the top of LockContext.java for more information.
      */
     public synchronized LockContext databaseContext() {
-        return context("database", 0L);
+        return context("database");
     }
 }

@@ -8,39 +8,34 @@ import static java.util.stream.Collectors.toList;
 
 /**
  * This class represents the full name of a resource. The name of a resource is
- * an ordered tuple of integers, and any subsequence of the tuple starting with
- * the first element is the name of a resource higher up on the hierarchy. For
- * debugging aid, we attach a string to each integer (which is only used in
- * toString()).
+ * an ordered tuple of strings, and any subsequence of the tuple starting with
+ * the first element is the name of a resource higher up on the hierarchy.
  *
- * For example, a page may have the name (0, 3, 10), where 3 is the table's
- * partition number and 10 is the page number. We store this as the list
- * [("database, 0), ("Students", 3), ("10", 10)], and its ancestors on the
- * hierarchy would be [("database", 0)] (which represents the entire database),
- * and [("database", 0), ("Students", 3)] (which represents the Students table,
+ * For example, a page may have the name ("database", "someTable", 10), where
+ * "someTable" is the name of the table the page belongs to, and 10 is the page
+ * number. We store this as the list ["database", "someTable", "10"] and its
+ * ancestors on the hierarchy would be ["database"] (which represents the entire
+ * database), and ["database", "someTable"] (which represents the the table,
  * of which this is a page of).
  */
 public class ResourceName {
-    private final List<Pair<String, Long>> names;
-    private final int hash;
+    private final List<String> names;
 
-    public ResourceName(Pair<String, Long> name) {
+    public ResourceName(String name) {
         this(Collections.singletonList(name));
     }
 
-    private ResourceName(List<Pair<String, Long>> names) {
+    private ResourceName(List<String> names) {
         this.names = new ArrayList<>(names);
-        this.hash = names.stream().map(x -> x == null ? null : x.getSecond()).collect(toList()).hashCode();
     }
 
     /**
      * @param parent This resource's parent, or null if this resource has no parent
      * @param name The name of this resource.
      */
-    ResourceName(ResourceName parent, Pair<String, Long> name) {
-        names = new ArrayList<>(parent.names);
-        names.add(name);
-        this.hash = names.stream().map(x -> x == null ? null : x.getSecond()).collect(toList()).hashCode();
+    ResourceName(ResourceName parent, String name) {
+        this.names = new ArrayList<>(parent.names);
+        this.names.add(name);
     }
 
     /**
@@ -61,10 +56,10 @@ public class ResourceName {
         if (other.names.size() >= names.size()) {
             return false;
         }
-        Iterator<Pair<String, Long>> mine = names.iterator();
-        Iterator<Pair<String, Long>> others = other.names.iterator();
+        Iterator<String> mine = names.iterator();
+        Iterator<String> others = other.names.iterator();
         while (others.hasNext()) {
-            if (!mine.next().getSecond().equals(others.next().getSecond())) {
+            if (!mine.next().equals(others.next())) {
                 return false;
             }
         }
@@ -72,19 +67,10 @@ public class ResourceName {
     }
 
     /**
-     * @return this resource's "current" name, e.g. for the resource:
-     * - [("database, 0), ("Students", 3), ("10", 10)]
-     * this method would return: ("10", 10)
-     */
-    Pair<String, Long> getCurrentName() {
-        return names.get(names.size() - 1);
-    }
-
-    /**
      * @return this resource's names, e.g. a list like the following:
-     * - [("database, 0), ("Students", 3), ("10", 10)]
+     * - ["database, "someTable", "10"]
      */
-    List<Pair<String, Long>> getNames() {
+    List<String> getNames() {
         return names;
     }
 
@@ -94,21 +80,24 @@ public class ResourceName {
         if (o == null) return false;
         if (!(o instanceof ResourceName)) return false;
         ResourceName other = (ResourceName) o;
-        return this.names.equals(other.names);
+        if (other.names.size() != this.names.size()) return false;
+        for (int i = 0; i < other.names.size(); i++) {
+            if (!this.names.get(i).equals(other.names.get(i))) return false;
+        }
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return hash;
+        return names.hashCode();
     }
 
     @Override
     public String toString() {
-        StringBuilder rn = new StringBuilder(names.get(0).getFirst());
+        StringBuilder rn = new StringBuilder(names.get(0));
         for (int i = 1; i < names.size(); ++i) {
-            rn.append('/').append(names.get(i).getFirst());
+            rn.append('/').append(names.get(i));
         }
         return rn.toString();
     }
 }
-

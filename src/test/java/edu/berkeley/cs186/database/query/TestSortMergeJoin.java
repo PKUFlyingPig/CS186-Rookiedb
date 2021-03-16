@@ -4,6 +4,7 @@ import edu.berkeley.cs186.database.*;
 import edu.berkeley.cs186.database.categories.*;
 import edu.berkeley.cs186.database.concurrency.DummyLockContext;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
+import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.query.join.SortMergeOperator;
 import org.junit.After;
@@ -96,9 +97,8 @@ public class TestSortMergeJoin {
         this.rightSourceOperator = rightSourceOperator;
 
         // hard-coded mess, but works as long as the first two tables created are the source operators
-        pinPage(1, 0); // information_schema.tables header page
-        pinPage(1, 3); // information_schema.tables entry for left source
-        pinPage(1, 4); // information_schema.tables entry for right source
+        pinPage(1, 0); // _metadata.tables header page
+        pinPage(2, 0); // _metadata.indices header page
         pinPage(3, 0); // left source header page
         pinPage(4, 0); // right source header page
     }
@@ -133,7 +133,7 @@ public class TestSortMergeJoin {
             }
             checkIOs(0);
 
-//            assertFalse("too many records", outputIterator.hasNext());
+            assertFalse("too many records", outputIterator.hasNext());
             outputIterator.hasNext();
             assertEquals("too few records", 100 * 100, numRecords);
         }
@@ -146,6 +146,8 @@ public class TestSortMergeJoin {
         try(Transaction transaction = d.beginTransaction()) {
             transaction.createTable(TestUtils.createSchemaWithAllTypes(), "leftTable");
             transaction.createTable(TestUtils.createSchemaWithAllTypes(), "rightTable");
+            pinPage(1, 1);
+            pinPage(1, 2);
 
             Record r1 = TestUtils.createRecordWithAllTypesWithValue(1);
             Record r2 = TestUtils.createRecordWithAllTypesWithValue(2);

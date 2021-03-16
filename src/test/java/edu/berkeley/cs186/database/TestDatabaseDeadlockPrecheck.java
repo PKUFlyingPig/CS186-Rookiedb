@@ -41,9 +41,8 @@ public class TestDatabaseDeadlockPrecheck {
 
     public static boolean performCheck(TemporaryFolder checkFolder) {
         // If we are unable to request an X lock after an X lock is requested and released, there is no point
-        // running any of the tests in this class - every test will block the main thread.
-        final ResourceName name = new ResourceName(new Pair<>("database", 0L));
-        final LockType lockType = LockType.X;
+        // running any of the later tests - every test will block the main thread.
+        final ResourceName name = new ResourceName("database");
 
         Thread mainRunner = new Thread(() -> {
             try {
@@ -52,13 +51,14 @@ public class TestDatabaseDeadlockPrecheck {
                 LoggingLockManager lockManager = new LoggingLockManager();
                 Database database = new Database(filename, 128, lockManager);
                 database.setWorkMem(32);
-                database.waitSetupFinished();
-                try(Transaction transaction = database.beginTransaction()) {
-                    lockManager.acquire(transaction.getTransactionContext(), name, lockType);
-                }
-                try(Transaction transaction = database.beginTransaction()) {
-                    lockManager.acquire(transaction.getTransactionContext(), name, lockType);
-                }
+
+                Transaction transactionA = database.beginTransaction();
+                lockManager.acquire(transactionA.getTransactionContext(), name, LockType.X);
+                transactionA.close(); // The X lock should be released here
+
+                Transaction transactionB = database.beginTransaction();
+                lockManager.acquire(transactionB.getTransactionContext(), name, LockType.X);
+                transactionB.close();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             } catch (Exception e) {

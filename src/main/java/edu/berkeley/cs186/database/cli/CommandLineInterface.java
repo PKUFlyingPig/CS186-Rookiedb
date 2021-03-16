@@ -155,12 +155,12 @@ public class CommandLineInterface {
                 // The schema column of the table contains raw bytes that we don't
                 // want to even attempt to display to the user. So we need to
                 // project out the last column.
-                QueryPlan plan = t.query("information_schema.tables");
+                QueryPlan plan = t.query("_metadata.tables");
                 List<String> columnNames = Arrays.asList(
                     "table_name", "part_num", "page_num", "is_temporary"
                 );
                 List<String> prefixed = columnNames.stream().map(
-                    s -> "information_schema.tables." + s
+                    s -> "_metadata.tables." + s
                 ).collect(Collectors.toList());
                 plan.project(prefixed);
                 PrettyPrinter.printRecords(columnNames, plan.execute());
@@ -179,7 +179,7 @@ public class CommandLineInterface {
             }
         } else if (cmd.equals("di")) {
             Transaction t = db.beginTransaction();
-            QueryOperator op = t.query("information_schema.indices").getFinalOperator();
+            QueryOperator op = t.query("_metadata.indices").getFinalOperator();
             PrettyPrinter.printRecords(op.getSchema().getFieldNames(), op.iterator());
             t.close();
         } else {

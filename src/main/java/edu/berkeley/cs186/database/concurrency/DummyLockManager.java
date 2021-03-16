@@ -9,19 +9,20 @@ import edu.berkeley.cs186.database.common.Pair;
 /**
  * Dummy lock manager that does no locking or error checking.
  *
- * Used for non-locking-related tests to disable locking.
+ * Used for non-locking-related tests to disable locking. This allows earlier
+ * and later projects to be completed without needing to complete Project 4.
  */
 public class DummyLockManager extends LockManager {
     public DummyLockManager() { }
 
     @Override
-    public LockContext context(String readable, long name) {
-        return new DummyLockContext(new Pair<>(readable, name));
+    public LockContext context(String name) {
+        return new DummyLockContext(name);
     }
 
     @Override
     public LockContext databaseContext() {
-        return new DummyLockContext(new Pair<>("database", 0L));
+        return new DummyLockContext("database");
     }
 
     @Override

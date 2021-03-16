@@ -45,7 +45,7 @@ import edu.berkeley.cs186.database.table.stats.TableStats;
  * Now, we discuss how tables serialize their data.
  *
  * All pages are data pages - there are no header pages, because all metadata is
- * stored elsewhere (as rows in the information_schema.tables table). Every data
+ * stored elsewhere (as rows in the _metadata.tables table). Every data
  * page begins with a n-byte bitmap followed by m records. The bitmap indicates
  * which records in the page are valid. The values of n and m are set to maximize the
  * number of records per page (see computeDataPageNumbers for details).
@@ -102,11 +102,11 @@ public class Table implements BacktrackingIterable<Record> {
     // The number of records on each data page.
     private int numRecordsPerPage;
 
-    // Statistics about the contents of the database.
-    private TableStats stats;
-
     // The lock context of the table.
-    private LockContext lockContext;
+    private LockContext tableContext;
+
+    // Statistics about the contents of the database.
+    Map<String, TableStats> stats;
 
     // Constructors ////////////////////////////////////////////////////////////
     /**
@@ -114,23 +114,24 @@ public class Table implements BacktrackingIterable<Record> {
      * is the lock context of the table (use a DummyLockContext() to disable locking). A
      * new table will be created if none exists in the pageDirectory.
      */
-    public Table(String name, Schema schema, PageDirectory pageDirectory, LockContext lockContext) {
-        LockUtil.ensureSufficientLockHeld(lockContext, LockType.X);
-
+    public Table(String name, Schema schema, PageDirectory pageDirectory, LockContext lockContext, Map<String, TableStats> stats) {
         this.name = name;
         this.pageDirectory = pageDirectory;
         this.schema = schema;
-        this.lockContext = lockContext;
+        this.tableContext = lockContext;
 
         this.bitmapSizeInBytes = computeBitmapSizeInBytes(pageDirectory.getEffectivePageSize(), schema);
         this.numRecordsPerPage = computeNumRecordsPerPage(pageDirectory.getEffectivePageSize(), schema);
         // mark everything that is not used for records as metadata
         this.pageDirectory.setEmptyPageMetadataSize((short) (pageDirectory.getEffectivePageSize() - numRecordsPerPage
                                                * schema.getSizeInBytes()));
-
-        this.stats = new TableStats(this.schema, this.numRecordsPerPage);
+        this.stats = stats;
+        if (!this.stats.containsKey(name)) this.stats.put(name, new TableStats(this.schema, this.numRecordsPerPage));
     }
 
+    public Table(String name, Schema schema, PageDirectory pageDirectory, LockContext lockContext) {
+        this(name, schema, pageDirectory, lockContext, new HashMap<>());
+    }
     // Accessors ///////////////////////////////////////////////////////////////
     public String getName() {
         return name;
@@ -152,7 +153,7 @@ public class Table implements BacktrackingIterable<Record> {
     }
 
     public TableStats getStats() {
-        return stats;
+        return this.stats.get(name);
     }
 
     public int getNumDataPages() {
@@ -223,7 +224,7 @@ public class Table implements BacktrackingIterable<Record> {
      * it multiple times refreshes the statistics
      */
     public void buildStatistics(int buckets) {
-        this.stats.refreshHistograms(buckets, this);
+        this.stats.get(name).refreshHistograms(buckets, this);
     }
 
     private synchronized void insertRecord(Page page, int entryNum, Record record) {
@@ -264,7 +265,7 @@ public class Table implements BacktrackingIterable<Record> {
             writeBitMap(page, bitmap);
 
             // Update the metadata.
-            stats.addRecord(record);
+            stats.get(name).addRecord(record);
             return new RecordId(page.getPageNum(), (short) entryNum);
         } finally {
             page.unpin();
@@ -303,7 +304,7 @@ public class Table implements BacktrackingIterable<Record> {
         validateRecordId(rid);
         // If we're updating a record we'll need exclusive access to the page
         // its on.
-        LockContext pageContext = lockContext.childContext(rid.getPageNum());
+        LockContext pageContext = tableContext.childContext(rid.getPageNum());
         // TODO(proj4_part2): Update the following line
         LockUtil.ensureSufficientLockHeld(pageContext, LockType.NL);
 
@@ -314,8 +315,8 @@ public class Table implements BacktrackingIterable<Record> {
         try {
             insertRecord(page, rid.getEntryNum(), newRecord);
 
-            this.stats.removeRecord(oldRecord);
-            this.stats.addRecord(newRecord);
+            this.stats.get(name).removeRecord(oldRecord);
+            this.stats.get(name).addRecord(newRecord);
             return oldRecord;
         } finally {
             page.unpin();
@@ -329,7 +330,7 @@ public class Table implements BacktrackingIterable<Record> {
      */
     public synchronized Record deleteRecord(RecordId rid) {
         validateRecordId(rid);
-        LockContext pageContext = lockContext.childContext(rid.getPageNum());
+        LockContext pageContext = tableContext.childContext(rid.getPageNum());
 
         // TODO(proj4_part2): Update the following line
         LockUtil.ensureSufficientLockHeld(pageContext, LockType.NL);
@@ -342,7 +343,7 @@ public class Table implements BacktrackingIterable<Record> {
             Bits.setBit(bitmap, rid.getEntryNum(), Bits.Bit.ZERO);
             writeBitMap(page, bitmap);
 
-            stats.removeRecord(record);
+            stats.get(name).removeRecord(record);
             int numRecords = numRecordsPerPage == 1 ? 0 : numRecordsOnPage(page);
             pageDirectory.updateFreeSpace(page,
                                      (short) ((numRecordsPerPage - numRecords) * schema.getSizeInBytes()));
@@ -398,9 +399,15 @@ public class Table implements BacktrackingIterable<Record> {
     }
 
     // Iterators ///////////////////////////////////////////////////////////////
+
+    /**
+     * @return Performs a full scan on the table to return id's of all existing
+     * records
+     */
     public BacktrackingIterator<RecordId> ridIterator() {
-        // Doing a scan of the table requires read access
-        LockUtil.ensureSufficientLockHeld(lockContext, LockType.S);
+        // TODO(proj4_part2): Update the following line
+        LockUtil.ensureSufficientLockHeld(tableContext, LockType.NL);
+
         BacktrackingIterator<Page> iter = pageDirectory.iterator();
         return new ConcatBacktrackingIterator<>(new PageIterator(iter, false));
     }
@@ -412,7 +419,8 @@ public class Table implements BacktrackingIterable<Record> {
      * will also support backtracking.
      */
     public BacktrackingIterator<Record> recordIterator(Iterator<RecordId> rids) {
-        LockUtil.ensureSufficientLockHeld(lockContext, LockType.S);
+        // TODO(proj4_part2): Update the following line
+        LockUtil.ensureSufficientLockHeld(tableContext, LockType.NL);
         return new RecordIterator(rids);
     }
 
