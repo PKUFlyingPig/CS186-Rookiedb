@@ -9,27 +9,19 @@ import java.util.Objects;
 import java.util.Optional;
 
 public class BeginCheckpointLogRecord extends LogRecord {
-    public long maxTransNum;
-
-    public BeginCheckpointLogRecord(long maxTransNum) {
+    public BeginCheckpointLogRecord() {
         super(LogType.BEGIN_CHECKPOINT);
-        this.maxTransNum = maxTransNum;
-    }
-
-    @Override
-    public Optional<Long> getMaxTransactionNum() {
-        return Optional.of(maxTransNum);
     }
 
     @Override
     public byte[] toBytes() {
-        byte[] b = new byte[9];
-        ByteBuffer.wrap(b).put((byte) getType().getValue()).putLong(maxTransNum);
+        byte[] b = new byte[1];
+        ByteBuffer.wrap(b).put((byte) getType().getValue());
         return b;
     }
 
     public static Optional<LogRecord> fromBytes(Buffer buf) {
-        return Optional.of(new BeginCheckpointLogRecord(buf.getLong()));
+        return Optional.of(new BeginCheckpointLogRecord());
     }
 
     @Override
@@ -37,19 +29,17 @@ public class BeginCheckpointLogRecord extends LogRecord {
         if (this == o) { return true; }
         if (o == null || getClass() != o.getClass()) { return false; }
         if (!super.equals(o)) { return false; }
-        BeginCheckpointLogRecord that = (BeginCheckpointLogRecord) o;
-        return maxTransNum == that.maxTransNum;
+        return true; // Begin Checkpoints are indistinguishable from each other
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), maxTransNum);
+        return Objects.hash(super.hashCode());
     }
 
     @Override
     public String toString() {
         return "BeginCheckpointLogRecord{" +
-               "maxTransNum=" + maxTransNum +
                ", LSN=" + LSN +
                '}';
     }

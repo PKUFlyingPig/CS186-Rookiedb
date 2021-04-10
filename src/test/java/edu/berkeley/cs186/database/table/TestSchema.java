@@ -1,24 +1,14 @@
 package edu.berkeley.cs186.database.table;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.fail;
-
-import java.util.Arrays;
-import java.util.List;
-
-import edu.berkeley.cs186.database.categories.*;
-import org.junit.Test;
-
 import edu.berkeley.cs186.database.DatabaseException;
+import edu.berkeley.cs186.database.categories.Proj99Tests;
+import edu.berkeley.cs186.database.categories.SystemTests;
 import edu.berkeley.cs186.database.common.ByteBuffer;
-import edu.berkeley.cs186.database.databox.BoolDataBox;
-import edu.berkeley.cs186.database.databox.DataBox;
-import edu.berkeley.cs186.database.databox.FloatDataBox;
-import edu.berkeley.cs186.database.databox.IntDataBox;
-import edu.berkeley.cs186.database.databox.StringDataBox;
 import edu.berkeley.cs186.database.databox.Type;
+import org.junit.Test;
 import org.junit.experimental.categories.Category;
+
+import static org.junit.Assert.*;
 
 @Category({Proj99Tests.class, SystemTests.class})
 public class TestSchema {

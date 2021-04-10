@@ -2,7 +2,10 @@ package edu.berkeley.cs186.database.memory;
 
 import edu.berkeley.cs186.database.common.AbstractBuffer;
 import edu.berkeley.cs186.database.common.Buffer;
-import edu.berkeley.cs186.database.concurrency.*;
+import edu.berkeley.cs186.database.concurrency.DummyLockContext;
+import edu.berkeley.cs186.database.concurrency.LockContext;
+import edu.berkeley.cs186.database.concurrency.LockType;
+import edu.berkeley.cs186.database.concurrency.LockUtil;
 import edu.berkeley.cs186.database.io.PageException;
 
 /**
@@ -41,7 +44,7 @@ public class Page {
      * Disables locking on this page handle.
      */
     public void disableLocking() {
-        this.lockContext = new DummyLockContext();
+        this.lockContext = new DummyLockContext("_dummyPage");
     }
 
     /**

@@ -2,7 +2,7 @@ package edu.berkeley.cs186.database.cli.visitor;
 
 import edu.berkeley.cs186.database.Transaction;
 import edu.berkeley.cs186.database.cli.parser.ASTColumnName;
-import edu.berkeley.cs186.database.cli.parser.ASTTableName;
+import edu.berkeley.cs186.database.cli.parser.ASTIdentifier;
 
 public class DropIndexStatementVisitor extends StatementVisitor {
     public String tableName;
@@ -14,7 +14,7 @@ public class DropIndexStatementVisitor extends StatementVisitor {
     }
 
     @Override
-    public void visit(ASTTableName node, Object data) {
+    public void visit(ASTIdentifier node, Object data) {
         this.tableName = (String) node.jjtGetValue();
     }
 

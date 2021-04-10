@@ -1,13 +1,11 @@
 package edu.berkeley.cs186.database;
 
-import edu.berkeley.cs186.database.databox.*;
+import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.query.TestSourceOperator;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 public class TestUtils {

@@ -1,12 +1,12 @@
 package edu.berkeley.cs186.database.table.stats;
 
-import java.util.Iterator;
-
 import edu.berkeley.cs186.database.common.PredicateOperator;
 import edu.berkeley.cs186.database.databox.DataBox;
-import edu.berkeley.cs186.database.table.Table;
-import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.databox.TypeId;
+import edu.berkeley.cs186.database.table.Record;
+import edu.berkeley.cs186.database.table.Table;
+
+import java.util.Iterator;
 
 /**
  * A histogram maintains approximate statistics about a (potentially large) set

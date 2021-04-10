@@ -1,9 +1,11 @@
 package edu.berkeley.cs186.database.concurrency;
 
-import edu.berkeley.cs186.database.TransactionContext;
 import edu.berkeley.cs186.database.TimeoutScaling;
-import edu.berkeley.cs186.database.categories.*;
-import edu.berkeley.cs186.database.common.Pair;
+import edu.berkeley.cs186.database.TransactionContext;
+import edu.berkeley.cs186.database.categories.HiddenTests;
+import edu.berkeley.cs186.database.categories.Proj4Part1Tests;
+import edu.berkeley.cs186.database.categories.Proj4Tests;
+import edu.berkeley.cs186.database.categories.PublicTests;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;

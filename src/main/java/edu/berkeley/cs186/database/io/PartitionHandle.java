@@ -2,6 +2,7 @@ package edu.berkeley.cs186.database.io;
 
 import edu.berkeley.cs186.database.TransactionContext;
 import edu.berkeley.cs186.database.common.Bits;
+import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.recovery.RecoveryManager;
 
 import java.io.IOException;
@@ -172,12 +173,11 @@ class PartitionHandle implements AutoCloseable {
         int pageNum = pageIndex + headerIndex * DATA_PAGES_PER_HEADER;
 
         TransactionContext transaction = TransactionContext.getTransaction();
+        long vpn = DiskSpaceManager.getVirtualPageNum(partNum, pageNum);
         if (transaction != null) {
-            long vpn = DiskSpaceManager.getVirtualPageNum(partNum, pageNum);
             recoveryManager.logAllocPage(transaction.getTransNum(), vpn);
-            recoveryManager.diskIOHook(vpn);
         }
-
+        recoveryManager.diskIOHook(vpn);
         this.writeMasterPage();
         this.writeHeaderPage(headerIndex);
 
@@ -201,16 +201,31 @@ class PartitionHandle implements AutoCloseable {
             throw new NoSuchElementException("cannot free unallocated page");
         }
 
+        TransactionContext transaction = TransactionContext.getTransaction();
+        long vpn = DiskSpaceManager.getVirtualPageNum(partNum, pageNum);
+        if (transaction != null) {
+            byte[] contents = new byte[PAGE_SIZE];
+            readPage(pageNum, contents);
+            int halfway = BufferManager.RESERVED_SPACE + BufferManager.EFFECTIVE_PAGE_SIZE / 2;
+            recoveryManager.logPageWrite(
+                    transaction.getTransNum(),
+                    vpn,
+                    (short) 0,
+                    Arrays.copyOfRange(contents, BufferManager.RESERVED_SPACE, halfway),
+                    new byte[BufferManager.EFFECTIVE_PAGE_SIZE / 2]
+            );
+            recoveryManager.logPageWrite(
+                    transaction.getTransNum(),
+                    vpn,
+                    (short) (BufferManager.EFFECTIVE_PAGE_SIZE / 2),
+                    Arrays.copyOfRange(contents, halfway, PAGE_SIZE),
+                    new byte[BufferManager.EFFECTIVE_PAGE_SIZE / 2]
+            );
+            recoveryManager.logFreePage(transaction.getTransNum(), vpn);
+        }
+        recoveryManager.diskIOHook(vpn);
         Bits.setBit(headerBytes, pageIndex, Bits.Bit.ZERO);
         this.masterPage[headerIndex] = Bits.countBits(headerBytes);
-
-        TransactionContext transaction = TransactionContext.getTransaction();
-        if (transaction != null) {
-            long vpn = DiskSpaceManager.getVirtualPageNum(partNum, pageNum);
-            recoveryManager.logFreePage(transaction.getTransNum(), vpn);
-            recoveryManager.diskIOHook(vpn);
-        }
-
         this.writeMasterPage();
         this.writeHeaderPage(headerIndex);
     }

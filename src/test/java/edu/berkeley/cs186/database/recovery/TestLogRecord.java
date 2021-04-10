@@ -9,9 +9,7 @@ import edu.berkeley.cs186.database.recovery.records.*;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -86,10 +84,6 @@ public class TestLogRecord {
     public void testUpdatePageSerialize() {
         checkSerialize(new UpdatePageLogRecord(-98765L, -43210L, -12345L, (short) 1234, "asdfg".getBytes(),
                                                "zxcvb".getBytes()));
-        checkSerialize(new UpdatePageLogRecord(-98765L, -43210L, -12345L, (short) 1234, null,
-                                               "zxcvb".getBytes()));
-        checkSerialize(new UpdatePageLogRecord(-98765L, -43210L, -12345L, (short) 1234, "asdfg".getBytes(),
-                                               null));
     }
 
     @Test
@@ -106,22 +100,21 @@ public class TestLogRecord {
 
     @Test
     public void testBeginCheckpointSerialize() {
-        checkSerialize(new BeginCheckpointLogRecord(92587213L));
+        checkSerialize(new BeginCheckpointLogRecord());
     }
 
     @Test
     public void testEndCheckpointSerialize() {
         Map<Long, Long> dpt = new HashMap<>();
         Map<Long, Pair<Transaction.Status, Long>> xacts = new HashMap<>();
-        Map<Long, List<Long>> touchedPages = new HashMap<>();
 
-        checkSerialize(new EndCheckpointLogRecord(dpt, xacts, touchedPages));
+        checkSerialize(new EndCheckpointLogRecord(dpt, xacts));
 
         for (long i = 0; i < 100; ++i) {
             dpt.put(i, i);
         }
 
-        checkSerialize(new EndCheckpointLogRecord(dpt, xacts, touchedPages));
+        checkSerialize(new EndCheckpointLogRecord(dpt, xacts));
 
         for (long i = 0; i < 53; ++i) {
             xacts.put(i, new Pair<>(Transaction.Status.RUNNING, i));
@@ -129,21 +122,13 @@ public class TestLogRecord {
             xacts.put(i, new Pair<>(Transaction.Status.ABORTING, i));
         }
 
-        checkSerialize(new EndCheckpointLogRecord(dpt, xacts, touchedPages));
-
-        for (long i = 43; i < 63; ++i) {
-            touchedPages.put(i, new ArrayList<>());
-            for (long j = 43; j < i; ++j) {
-                touchedPages.get(i).add(j);
-            }
-        }
-
-        checkSerialize(new EndCheckpointLogRecord(dpt, xacts, touchedPages));
+        checkSerialize(new EndCheckpointLogRecord(dpt, xacts));
+        checkSerialize(new EndCheckpointLogRecord(dpt, xacts));
 
         dpt.clear();
-        checkSerialize(new EndCheckpointLogRecord(dpt, xacts, touchedPages));
+        checkSerialize(new EndCheckpointLogRecord(dpt, xacts));
 
         xacts.clear();
-        checkSerialize(new EndCheckpointLogRecord(dpt, xacts, touchedPages));
+        checkSerialize(new EndCheckpointLogRecord(dpt, xacts));
     }
 }

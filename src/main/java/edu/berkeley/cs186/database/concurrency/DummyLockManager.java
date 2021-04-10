@@ -1,10 +1,9 @@
 package edu.berkeley.cs186.database.concurrency;
 
+import edu.berkeley.cs186.database.TransactionContext;
+
 import java.util.Collections;
 import java.util.List;
-
-import edu.berkeley.cs186.database.TransactionContext;
-import edu.berkeley.cs186.database.common.Pair;
 
 /**
  * Dummy lock manager that does no locking or error checking.

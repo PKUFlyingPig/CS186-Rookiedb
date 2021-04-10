@@ -1,19 +1,20 @@
 package edu.berkeley.cs186.database.concurrency;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.function.UnaryOperator;
-
 import edu.berkeley.cs186.database.TransactionContext;
 import edu.berkeley.cs186.database.common.PredicateOperator;
 import edu.berkeley.cs186.database.common.iterator.BacktrackingIterator;
 import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.index.BPlusTreeMetadata;
-import edu.berkeley.cs186.database.memory.Page;
-import edu.berkeley.cs186.database.table.*;
 import edu.berkeley.cs186.database.table.Record;
+import edu.berkeley.cs186.database.table.RecordId;
+import edu.berkeley.cs186.database.table.Schema;
+import edu.berkeley.cs186.database.table.Table;
 import edu.berkeley.cs186.database.table.stats.TableStats;
+
+import java.util.Iterator;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * A dummy transaction class that only supports checking/setting active/blocked
@@ -119,8 +120,18 @@ public class DummyTransactionContext extends TransactionContext {
     }
 
     @Override
+    public void updateRecordWhere(String tableName, String targetColumnName, Function<Record, DataBox> expr, Function<Record, DataBox> cond) {
+        throw new UnsupportedOperationException("dummy transaction cannot do this");
+    }
+
+    @Override
     public void deleteRecordWhere(String tableName, String predColumnName,
                                   PredicateOperator predOperator, DataBox predValue) {
+        throw new UnsupportedOperationException("dummy transaction cannot do this");
+    }
+
+    @Override
+    public void deleteRecordWhere(String tableName, Function<Record, DataBox> cond) {
         throw new UnsupportedOperationException("dummy transaction cannot do this");
     }
 

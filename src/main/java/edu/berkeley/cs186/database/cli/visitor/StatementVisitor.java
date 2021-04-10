@@ -1,10 +1,10 @@
 package edu.berkeley.cs186.database.cli.visitor;
 
-import java.util.Optional;
-
 import edu.berkeley.cs186.database.Transaction;
 import edu.berkeley.cs186.database.cli.parser.RookieParserDefaultVisitor;
 import edu.berkeley.cs186.database.query.QueryPlan;
+
+import java.util.Optional;
 
 public abstract class StatementVisitor extends RookieParserDefaultVisitor {
     public void execute(Transaction transaction) {

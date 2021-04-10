@@ -1,7 +1,6 @@
 package edu.berkeley.cs186.database.concurrency;
 
 import edu.berkeley.cs186.database.TransactionContext;
-import edu.berkeley.cs186.database.common.Pair;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;

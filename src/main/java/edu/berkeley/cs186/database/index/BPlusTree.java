@@ -1,10 +1,5 @@
 package edu.berkeley.cs186.database.index;
 
-import java.io.IOException;
-import java.io.FileWriter;
-import java.io.UncheckedIOException;
-import java.util.*;
-
 import edu.berkeley.cs186.database.TransactionContext;
 import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.LockContext;
@@ -15,6 +10,11 @@ import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.table.RecordId;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.*;
 
 /**
  * A persistent B+ tree.

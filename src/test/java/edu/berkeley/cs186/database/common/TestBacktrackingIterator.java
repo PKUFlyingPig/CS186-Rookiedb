@@ -3,7 +3,6 @@ package edu.berkeley.cs186.database.common;
 import edu.berkeley.cs186.database.categories.Proj99Tests;
 import edu.berkeley.cs186.database.categories.SystemTests;
 import edu.berkeley.cs186.database.common.iterator.ArrayBacktrackingIterator;
-
 import edu.berkeley.cs186.database.common.iterator.BacktrackingIterable;
 import edu.berkeley.cs186.database.common.iterator.BacktrackingIterator;
 import edu.berkeley.cs186.database.common.iterator.ConcatBacktrackingIterator;

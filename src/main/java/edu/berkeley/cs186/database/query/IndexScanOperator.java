@@ -1,7 +1,6 @@
 package edu.berkeley.cs186.database.query;
 
 import edu.berkeley.cs186.database.TransactionContext;
-import edu.berkeley.cs186.database.DatabaseException;
 import edu.berkeley.cs186.database.common.PredicateOperator;
 import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.table.Record;

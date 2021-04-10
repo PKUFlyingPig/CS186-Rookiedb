@@ -1,14 +1,15 @@
 package edu.berkeley.cs186.database.query;
 
-import java.util.*;
-
 import edu.berkeley.cs186.database.TransactionContext;
 import edu.berkeley.cs186.database.common.PredicateOperator;
 import edu.berkeley.cs186.database.databox.DataBox;
+import edu.berkeley.cs186.database.query.aggr.DataFunction;
 import edu.berkeley.cs186.database.query.join.BNLJOperator;
 import edu.berkeley.cs186.database.query.join.SNLJOperator;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
+
+import java.util.*;
 
 /**
  * QueryPlan provides a set of functions to generate simple queries. Calling the
@@ -22,16 +23,22 @@ public class QueryPlan {
     private QueryOperator finalOperator;
     // A list of columns to output (SELECT clause)
     private List<String> projectColumns;
+    // Used by command line version to pass expressions to evaluate
+    private List<DataFunction> projectFunctions;
     // A list of aliased table names involved in this query (FROM clause)
     private List<String> tableNames;
     // A list of objects representing joins (INNER JOIN clauses)
     private List<JoinPredicate> joinPredicates;
     // A map from aliases to tableNames (tableName AS alias)
     private Map<String, String> aliases;
+    // Aliases for temporary tables from WITH clause
+    private Map<String, String> cteAliases;
     // A list of objects representing selection predicates (WHERE clause)
     private List<SelectPredicate> selectPredicates;
     // A list of columns to group by (GROUP BY clause)
     private List<String> groupByColumns;
+    // Column to sort on
+    private String sortColumn;
     // A limit to the number of records yielded (LIMIT clause)
     private int limit;
     // An offset to the records yielded (OFFSET clause)
@@ -66,11 +73,13 @@ public class QueryPlan {
 
         // Handle aliasing
         this.aliases = new HashMap<>();
+        this.cteAliases = new HashMap<>();
         this.aliases.put(aliasTableName, baseTableName);
         this.transaction.setAliasMap(this.aliases);
 
         // These will be populated as the user adds projects, selects, etc...
         this.projectColumns = new ArrayList<>();
+        this.projectFunctions = null;
         this.joinPredicates = new ArrayList<>();
         this.selectPredicates = new ArrayList<>();
         this.groupByColumns = new ArrayList<>();
@@ -259,21 +268,60 @@ public class QueryPlan {
         this.projectColumns = new ArrayList<>(columnNames);
     }
 
+    public void project(List<String> names, List<DataFunction> functions) {
+        this.projectColumns = names;
+        this.projectFunctions = functions;
+    }
+
     /**
      * Sets the final operator to a project operator with the original final
      * operator as its source. Does nothing if there are no project columns.
      */
-    private void addProjects() {
+    private void addProject() {
         if (!this.projectColumns.isEmpty()) {
             if (this.finalOperator == null) throw new RuntimeException(
                     "Can't add Project onto null finalOperator."
             );
-            this.finalOperator = new ProjectOperator(
-                    this.finalOperator,
-                    this.projectColumns,
-                    this.groupByColumns
-            );
+            if (this.projectFunctions == null) {
+                this.finalOperator = new ProjectOperator(
+                        this.finalOperator,
+                        this.projectColumns,
+                        this.groupByColumns
+                );
+            } else {
+                this.finalOperator = new ProjectOperator(
+                        this.finalOperator,
+                        this.projectColumns,
+                        this.projectFunctions,
+                        this.groupByColumns
+                );
+            }
         }
+    }
+
+    // Sort ////////////////////////////////////////////////////////////////////
+    /**
+     * Add a sort operator to the query plan on the given column.
+     */
+    public void sort(String sortColumn) {
+        if (sortColumn == null) throw new UnsupportedOperationException("Only one sort column supported");
+        this.sortColumn = sortColumn;
+    }
+
+    /**
+     * Sets the final operator to a sort operator if a sort was specified and
+     * the final operator isn't already sorted.
+     */
+    private void addSort() {
+        if (this.sortColumn == null) return;
+        if (this.finalOperator.sortedBy().contains(sortColumn.toLowerCase())) {
+            return; // already sorted
+        }
+        this.finalOperator = new SortOperator(
+                this.transaction,
+                this.finalOperator,
+                this.sortColumn
+        );
     }
 
     // Limit ///////////////////////////////////////////////////////////////////
@@ -407,6 +455,9 @@ public class QueryPlan {
         if (this.aliases.containsKey(aliasTableName)) {
             throw new RuntimeException("table/alias " + aliasTableName + " already in use");
         }
+        if (cteAliases.containsKey(tableName)) {
+            tableName = cteAliases.get(tableName);
+        }
         this.aliases.put(aliasTableName, tableName);
         this.joinPredicates.add(new JoinPredicate(
                 aliasTableName,
@@ -438,6 +489,19 @@ public class QueryPlan {
             );
             pos++;
         }
+    }
+
+    public void addTempTableAlias(String tableName, String alias) {
+        if (cteAliases.containsKey(alias)) {
+            throw new UnsupportedOperationException("Duplicate alias " + alias);
+        }
+        cteAliases.put(alias, tableName);
+        for (String k: aliases.keySet()) {
+            if (aliases.get(k).toLowerCase().equals(alias.toLowerCase())) {
+                aliases.put(k, tableName);
+            }
+        }
+        this.transaction.setAliasMap(this.aliases);
     }
 
     // Task 5: Single Table Access Selection ///////////////////////////////////
@@ -497,11 +561,12 @@ public class QueryPlan {
      * determine the cost of a sequential scan for the given table. Then for
      * every index that can be used on that table, determine the cost of an
      * index scan. Keep track of the minimum cost operation and push down
-     * eligible projects (select predicates).
+     * eligible select predicates.
      *
-     * If an index scan was chosen, exclude that select predicate when pushing
-     * down selects. This method will be called during the first pass of the
-     * search algorithm to determine the most efficient way to access each table.
+     * If an index scan was chosen, exclude the redundant select predicate when
+     * pushing down selects. This method will be called during the first pass of
+     * the search algorithm to determine the most efficient way to access each
+     * table.
      *
      * @return a QueryOperator that has the lowest cost of scanning the given
      * table which is either a SequentialScanOperator or an IndexScanOperator
@@ -617,6 +682,7 @@ public class QueryPlan {
      * @return an iterator of records that is the result of this query
      */
     public Iterator<Record> execute() {
+        this.transaction.setAliasMap(this.aliases);
         // TODO(proj3_part2): implement
         // Pass 1: For each table, find the lowest cost QueryOperator to access
         // the table. Construct a mapping of each table name to its lowest cost
@@ -627,8 +693,8 @@ public class QueryPlan {
         // tables have been joined.
         //
         // Set the final operator to the lowest cost operator from the last
-        // pass, add group by and project operators, and return an iterator over
-        // the final operator
+        // pass, add group by, project, sort and limit operators, and return an
+        // iterator over the final operator.
         return this.executeNaive(); // TODO(proj3_part2): Replace this!
     }
 
@@ -685,13 +751,14 @@ public class QueryPlan {
         );
         this.selectPredicates.remove(indexPredicate);
         this.addSelectsNaive();
-        this.addProjects();
+        this.addProject();
     }
 
     /**
      * Generates a naive QueryPlan in which all joins are at the bottom of the
-     * DAG followed by all select predicates, an optional group by operator, and
-     * a set of projects (in that order).
+     * DAG followed by all select predicates, an optional group by operator, an
+     * optional project operator, an optional sort operator, and an optional
+     * limit operator (in that order).
      *
      * @return an iterator of records that is the result of this query
      */
@@ -712,7 +779,8 @@ public class QueryPlan {
                 this.addJoinsNaive();
                 this.addSelectsNaive();
                 this.addGroupBy();
-                this.addProjects();
+                this.addProject();
+                this.addSort();
                 this.addLimit();
             }
             return this.finalOperator.iterator();

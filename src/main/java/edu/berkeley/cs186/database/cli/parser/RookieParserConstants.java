@@ -21,105 +21,117 @@ public interface RookieParserConstants {
   /** RegularExpression Id. */
   int STAR = 10;
   /** RegularExpression Id. */
-  int LT = 11;
+  int FSLASH = 11;
   /** RegularExpression Id. */
-  int LT_EQ = 12;
+  int PERCENT = 12;
   /** RegularExpression Id. */
-  int GT = 13;
+  int PLUS = 13;
   /** RegularExpression Id. */
-  int GT_EQ = 14;
+  int MINUS = 14;
   /** RegularExpression Id. */
-  int EQEQ = 15;
+  int LT = 15;
   /** RegularExpression Id. */
-  int EQ = 16;
+  int LT_EQ = 16;
   /** RegularExpression Id. */
-  int NOT_EQ1 = 17;
+  int GT = 17;
   /** RegularExpression Id. */
-  int NOT_EQ2 = 18;
+  int GT_EQ = 18;
   /** RegularExpression Id. */
-  int FALSE = 19;
+  int EQEQ = 19;
   /** RegularExpression Id. */
-  int TRUE = 20;
+  int EQ = 20;
   /** RegularExpression Id. */
-  int K_WITH = 21;
+  int NOT_EQ1 = 21;
   /** RegularExpression Id. */
-  int K_AS = 22;
+  int NOT_EQ2 = 22;
   /** RegularExpression Id. */
-  int K_DELETE = 23;
+  int FALSE = 23;
   /** RegularExpression Id. */
-  int K_INSERT = 24;
+  int TRUE = 24;
   /** RegularExpression Id. */
-  int K_INTO = 25;
+  int K_WITH = 25;
   /** RegularExpression Id. */
-  int K_UPDATE = 26;
+  int K_AS = 26;
   /** RegularExpression Id. */
-  int K_SET = 27;
+  int K_DELETE = 27;
   /** RegularExpression Id. */
-  int K_SELECT = 28;
+  int K_INSERT = 28;
   /** RegularExpression Id. */
-  int K_FROM = 29;
+  int K_INTO = 29;
   /** RegularExpression Id. */
-  int K_INNER = 30;
+  int K_UPDATE = 30;
   /** RegularExpression Id. */
-  int K_JOIN = 31;
+  int K_SET = 31;
   /** RegularExpression Id. */
-  int K_ON = 32;
+  int K_SELECT = 32;
   /** RegularExpression Id. */
-  int K_WHERE = 33;
+  int K_FROM = 33;
   /** RegularExpression Id. */
-  int K_AND = 34;
+  int K_INNER = 34;
   /** RegularExpression Id. */
-  int K_GROUP = 35;
+  int K_JOIN = 35;
   /** RegularExpression Id. */
-  int K_BY = 36;
+  int K_ON = 36;
   /** RegularExpression Id. */
-  int K_LIMIT = 37;
+  int K_WHERE = 37;
   /** RegularExpression Id. */
-  int K_CREATE = 38;
+  int K_AND = 38;
   /** RegularExpression Id. */
-  int K_DROP = 39;
+  int K_OR = 39;
   /** RegularExpression Id. */
-  int K_TABLE = 40;
+  int K_GROUP = 40;
   /** RegularExpression Id. */
-  int K_VALUES = 41;
+  int K_BY = 41;
   /** RegularExpression Id. */
-  int K_INDEX = 42;
+  int K_LIMIT = 42;
   /** RegularExpression Id. */
-  int K_BEGIN = 43;
+  int K_CREATE = 43;
   /** RegularExpression Id. */
-  int K_END = 44;
+  int K_DROP = 44;
   /** RegularExpression Id. */
-  int K_COMMIT = 45;
+  int K_TABLE = 45;
   /** RegularExpression Id. */
-  int K_TRANSACTION = 46;
+  int K_VALUES = 46;
   /** RegularExpression Id. */
-  int K_SAVEPOINT = 47;
+  int K_INDEX = 47;
   /** RegularExpression Id. */
-  int K_ROLLBACK = 48;
+  int K_BEGIN = 48;
   /** RegularExpression Id. */
-  int K_TO = 49;
+  int K_END = 49;
   /** RegularExpression Id. */
-  int K_RELEASE = 50;
+  int K_COMMIT = 50;
   /** RegularExpression Id. */
-  int K_EXPLAIN = 51;
+  int K_TRANSACTION = 51;
   /** RegularExpression Id. */
-  int K_QUERY = 52;
+  int K_SAVEPOINT = 52;
   /** RegularExpression Id. */
-  int K_PLAN = 53;
+  int K_ROLLBACK = 53;
   /** RegularExpression Id. */
-  int K_ANALYZE = 54;
+  int K_TO = 54;
   /** RegularExpression Id. */
-  int NUMERIC_LITERAL = 55;
+  int K_RELEASE = 55;
   /** RegularExpression Id. */
-  int DIGITS = 56;
+  int K_EXPLAIN = 56;
   /** RegularExpression Id. */
-  int DIGIT = 57;
+  int K_QUERY = 57;
   /** RegularExpression Id. */
-  int SIGN = 58;
+  int K_PLAN = 58;
   /** RegularExpression Id. */
-  int STRING_LITERAL = 59;
+  int K_ANALYZE = 59;
   /** RegularExpression Id. */
-  int IDENTIFIER = 60;
+  int K_ORDER = 60;
+  /** RegularExpression Id. */
+  int NUMERIC_LITERAL = 61;
+  /** RegularExpression Id. */
+  int DIGITS = 62;
+  /** RegularExpression Id. */
+  int DIGIT = 63;
+  /** RegularExpression Id. */
+  int SIGN = 64;
+  /** RegularExpression Id. */
+  int STRING_LITERAL = 65;
+  /** RegularExpression Id. */
+  int IDENTIFIER = 66;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -137,6 +149,10 @@ public interface RookieParserConstants {
     "\")\"",
     "\",\"",
     "\"*\"",
+    "\"/\"",
+    "\"%\"",
+    "\"+\"",
+    "\"-\"",
     "\"<\"",
     "\"<=\"",
     "\">\"",
@@ -161,6 +177,7 @@ public interface RookieParserConstants {
     "\"on\"",
     "\"where\"",
     "\"and\"",
+    "\"or\"",
     "\"group\"",
     "\"by\"",
     "\"limit\"",
@@ -181,6 +198,7 @@ public interface RookieParserConstants {
     "\"query\"",
     "\"plan\"",
     "\"analyze\"",
+    "\"order\"",
     "<NUMERIC_LITERAL>",
     "<DIGITS>",
     "<DIGIT>",

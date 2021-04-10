@@ -1,13 +1,14 @@
 package edu.berkeley.cs186.database;
 
 import edu.berkeley.cs186.database.common.PredicateOperator;
+import edu.berkeley.cs186.database.databox.BoolDataBox;
 import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.query.QueryPlan;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
-import edu.berkeley.cs186.database.table.Table;
 
-import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
@@ -38,6 +39,11 @@ public abstract class Transaction implements AutoCloseable {
     }
 
     private Status status = Status.RUNNING;
+
+    /**
+     * Executes a statement (e.g. SELECT, UPDATE, INSERT, etc...)
+     */
+    public abstract Optional<QueryPlan> execute(String statement);
 
     /**
      * @return transaction number
@@ -231,6 +237,24 @@ public abstract class Transaction implements AutoCloseable {
                                 String predColumnName, PredicateOperator predOperator, DataBox predValue);
 
     /**
+     * @param tableName name of table to update
+     * @param targetColumnName column to update
+     * @param expr expression that evaluates to the new updated values
+     */
+    public void update(String tableName, String targetColumnName, Function<Record, DataBox> expr) {
+        update(tableName, targetColumnName, expr, (r) -> new BoolDataBox(true));
+    };
+
+    /**
+     * @param tableName name of table to update
+     * @param targetColumnName column to update
+     * @param expr expression that evaluates to the new updated values
+     * @param cond expression that is evaluated to determine if a given record
+     *             should be updated.
+     */
+    public abstract void update(String tableName, String targetColumnName, Function<Record, DataBox> expr, Function<Record, DataBox> cond);
+
+    /**
      * Deletes rows from a table. Equivalent to
      *      DELETE FROM tableNAME WHERE predColumnName predOperator predValue
      *
@@ -241,6 +265,13 @@ public abstract class Transaction implements AutoCloseable {
      */
     public abstract void delete(String tableName, String predColumnName, PredicateOperator predOperator,
                 DataBox predValue);
+
+    /**
+     * @param tableName name of table to delete from
+     * @param cond expression that is evaluated to determine if a given record
+     *             should be deleted based on its values
+     */
+    public abstract void delete(String tableName, Function<Record, DataBox> cond);
 
     // Savepoints //////////////////////////////////////////////////////////////
 

@@ -233,7 +233,7 @@ public class BufferManager implements AutoCloseable {
                         int len = range.getSecond();
                         byte[] before = Arrays.copyOfRange(contents, start + offset, start + offset + len);
                         byte[] after = Arrays.copyOfRange(buf, start, start + len);
-                        long pageLSN = recoveryManager.logPageWrite(transaction.getTransNum(), pageNum, position, before,
+                        long pageLSN = recoveryManager.logPageWrite(transaction.getTransNum(), pageNum, (short) (start + position), before,
                                        after);
                         this.setPageLSN(pageLSN);
                     }
@@ -299,10 +299,15 @@ public class BufferManager implements AutoCloseable {
          */
         private List<Pair<Integer, Integer>> getChangedBytes(int offset, int num, byte[] buf) {
             List<Pair<Integer, Integer>> ranges = new ArrayList<>();
+            int maxRange = EFFECTIVE_PAGE_SIZE / 2;
             int startIndex = -1;
             int skip = -1;
             for (int i = 0; i < num; ++i) {
-                if (buf[i] == contents[offset + i] && startIndex >= 0) {
+                if (startIndex >= 0 && maxRange == i - startIndex) {
+                    ranges.add(new Pair<>(startIndex, maxRange));
+                    startIndex = -1;
+                    skip = -1;
+                } else if (buf[i] == contents[offset + i] && startIndex >= 0) {
                     if (skip > BufferManager.RESERVED_SPACE) {
                         ranges.add(new Pair<>(startIndex, i - startIndex - skip));
                         startIndex = -1;
@@ -497,15 +502,7 @@ public class BufferManager implements AutoCloseable {
             int frameIndex = this.pageToFrame.get(page.getPageNum());
 
             Frame frame = this.frames[frameIndex];
-            if (transaction != null) {
-                recoveryManager.logPageWrite(
-                        transaction.getTransNum(),
-                        page.getPageNum(),
-                        (short) 0,
-                        frame.contents,
-                        new byte[EFFECTIVE_PAGE_SIZE]
-                );
-            }
+            if (transaction != null) page.flush();
             this.pageToFrame.remove(page.getPageNum(), frameIndex);
             evictionPolicy.cleanup(frame);
             frame.setFree();
@@ -532,8 +529,8 @@ public class BufferManager implements AutoCloseable {
                 if (DiskSpaceManager.getPartNum(frame.pageNum) == partNum) {
                     this.pageToFrame.remove(frame.getPageNum(), i);
                     evictionPolicy.cleanup(frame);
+                    frame.flush();
                     frame.setFree();
-
                     frames[i] = new Frame(frame);
                 }
             }

@@ -15,7 +15,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 import static org.junit.Assert.*;
 
@@ -43,7 +45,7 @@ public class TestPageDirectory {
     }
 
     private void createPageDirectory(short metadataSize) {
-        Page page = bufferManager.fetchNewPage(new DummyLockContext(), 0);
+        Page page = bufferManager.fetchNewPage(new DummyLockContext("_dummyPageDirectoryRecord"), 0);
         try {
             createPageDirectory(page.getPageNum(), metadataSize);
         } finally {

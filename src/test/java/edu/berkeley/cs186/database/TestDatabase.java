@@ -1,25 +1,28 @@
 package edu.berkeley.cs186.database;
 
-import edu.berkeley.cs186.database.categories.*;
+import edu.berkeley.cs186.database.categories.Proj99Tests;
+import edu.berkeley.cs186.database.categories.SystemTests;
 import edu.berkeley.cs186.database.common.PredicateOperator;
-import edu.berkeley.cs186.database.databox.*;
+import edu.berkeley.cs186.database.databox.DataBox;
+import edu.berkeley.cs186.database.databox.IntDataBox;
+import edu.berkeley.cs186.database.databox.StringDataBox;
+import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.query.QueryPlan;
-import edu.berkeley.cs186.database.table.*;
 import edu.berkeley.cs186.database.table.Record;
-
+import edu.berkeley.cs186.database.table.RecordId;
+import edu.berkeley.cs186.database.table.Schema;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Test;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 
-import static org.junit.Assert.*;
-
 import java.io.File;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 @Category({Proj99Tests.class, SystemTests.class})
 public class TestDatabase {

@@ -1,8 +1,11 @@
 package edu.berkeley.cs186.database;
 
-import edu.berkeley.cs186.database.categories.*;
+import edu.berkeley.cs186.database.categories.HiddenTests;
+import edu.berkeley.cs186.database.categories.Proj4IntegrationTests;
+import edu.berkeley.cs186.database.categories.PublicTests;
 import edu.berkeley.cs186.database.common.PredicateOperator;
-import edu.berkeley.cs186.database.concurrency.*;
+import edu.berkeley.cs186.database.concurrency.DeterministicRunner;
+import edu.berkeley.cs186.database.concurrency.LoggingLockManager;
 import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.databox.IntDataBox;
 import edu.berkeley.cs186.database.databox.Type;
@@ -12,7 +15,10 @@ import edu.berkeley.cs186.database.table.RecordId;
 import edu.berkeley.cs186.database.table.Schema;
 import org.junit.*;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.*;
+import org.junit.rules.DisableOnDebug;
+import org.junit.rules.TemporaryFolder;
+import org.junit.rules.TestRule;
+import org.junit.rules.Timeout;
 
 import java.io.File;
 import java.util.*;

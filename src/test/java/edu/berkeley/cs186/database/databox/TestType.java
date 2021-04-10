@@ -1,14 +1,14 @@
 package edu.berkeley.cs186.database.databox;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-
-import edu.berkeley.cs186.database.categories.*;
+import edu.berkeley.cs186.database.categories.Proj99Tests;
+import edu.berkeley.cs186.database.categories.SystemTests;
 import edu.berkeley.cs186.database.common.Buffer;
 import edu.berkeley.cs186.database.common.ByteBuffer;
-
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 @Category({Proj99Tests.class, SystemTests.class})
 public class TestType {

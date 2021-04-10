@@ -8,6 +8,7 @@ import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.recovery.LogRecord;
 import edu.berkeley.cs186.database.recovery.LogType;
+import edu.berkeley.cs186.database.recovery.RecoveryManager;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -58,16 +59,17 @@ public class UndoUpdatePageLogRecord extends LogRecord {
     }
 
     @Override
-    public void redo(DiskSpaceManager dsm, BufferManager bm) {
-        super.redo(dsm, bm);
+    public void redo(RecoveryManager rm, DiskSpaceManager dsm, BufferManager bm) {
+        super.redo(rm, dsm, bm);
 
-        Page page = bm.fetchPage(new DummyLockContext(), pageNum);
+        Page page = bm.fetchPage(new DummyLockContext("_dummyUndoUpdatePageRecord"), pageNum);
         try {
             page.getBuffer().position(offset).put(after);
             page.setPageLSN(getLSN());
         } finally {
             page.unpin();
         }
+        rm.dirtyPage(pageNum, getLSN());
     }
 
     @Override

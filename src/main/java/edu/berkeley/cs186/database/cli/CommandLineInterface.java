@@ -1,31 +1,24 @@
 package edu.berkeley.cs186.database.cli;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Random;
-import java.util.Scanner;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-
 import edu.berkeley.cs186.database.Database;
 import edu.berkeley.cs186.database.DatabaseException;
 import edu.berkeley.cs186.database.Transaction;
 import edu.berkeley.cs186.database.cli.parser.ASTSQLStatementList;
-import edu.berkeley.cs186.database.cli.parser.RookieParser;
 import edu.berkeley.cs186.database.cli.parser.ParseException;
+import edu.berkeley.cs186.database.cli.parser.RookieParser;
 import edu.berkeley.cs186.database.cli.parser.TokenMgrError;
-import edu.berkeley.cs186.database.cli.visitor.RookieParserVisitor;
+import edu.berkeley.cs186.database.cli.visitor.StatementListVisitor;
 import edu.berkeley.cs186.database.concurrency.LockManager;
 import edu.berkeley.cs186.database.memory.ClockEvictionPolicy;
-import edu.berkeley.cs186.database.query.QueryOperator;
-import edu.berkeley.cs186.database.query.QueryPlan;
+import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
 import edu.berkeley.cs186.database.table.Table;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class CommandLineInterface {
     private static String mascot = "\n\\|/  ___------___\n \\__|--%s______%s--|\n    |  %-9s |\n     ---______---\n";
@@ -100,7 +93,7 @@ public class CommandLineInterface {
                 System.out.println("Parser exception: " + e.getMessage());
                 continue;
             }
-            RookieParserVisitor visitor = new RookieParserVisitor(db);
+            StatementListVisitor visitor = new StatementListVisitor(db);
             try {
                 node.jjtAccept(visitor, null);
                 currTransaction = visitor.execute(currTransaction);
@@ -151,20 +144,9 @@ public class CommandLineInterface {
         String cmd = tokens[0];
         if (cmd.equals("d")) {
             if (tokens.length == 1) {
-                Transaction t = db.beginTransaction();
-                // The schema column of the table contains raw bytes that we don't
-                // want to even attempt to display to the user. So we need to
-                // project out the last column.
-                QueryPlan plan = t.query("_metadata.tables");
-                List<String> columnNames = Arrays.asList(
-                    "table_name", "part_num", "page_num", "is_temporary"
-                );
-                List<String> prefixed = columnNames.stream().map(
-                    s -> "_metadata.tables." + s
-                ).collect(Collectors.toList());
-                plan.project(prefixed);
-                PrettyPrinter.printRecords(columnNames, plan.execute());
-                t.close();
+                List<Record> records = db.scanTableMetadataRecords();
+                PrettyPrinter.printRecords(db.getTableInfoSchema().getFieldNames(),
+                        records.iterator());
             } else if (tokens.length == 2) {
                 String tableName = tokens[1];
                 Transaction t = db.beginTransaction();
@@ -178,10 +160,9 @@ public class CommandLineInterface {
                 PrettyPrinter.printSchema(s);
             }
         } else if (cmd.equals("di")) {
-            Transaction t = db.beginTransaction();
-            QueryOperator op = t.query("_metadata.indices").getFinalOperator();
-            PrettyPrinter.printRecords(op.getSchema().getFieldNames(), op.iterator());
-            t.close();
+            List<Record> records = db.scanIndexMetadataRecords();
+            PrettyPrinter.printRecords(db.getIndexInfoSchema().getFieldNames(),
+                    records.iterator());
         } else {
             throw new IllegalArgumentException(String.format(
                 "`%s` is not a valid metacommand",

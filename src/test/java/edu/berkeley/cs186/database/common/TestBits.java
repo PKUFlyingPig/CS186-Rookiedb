@@ -1,6 +1,7 @@
 package edu.berkeley.cs186.database.common;
 
-import edu.berkeley.cs186.database.categories.*;
+import edu.berkeley.cs186.database.categories.Proj99Tests;
+import edu.berkeley.cs186.database.categories.SystemTests;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 

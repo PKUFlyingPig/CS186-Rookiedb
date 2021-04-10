@@ -1,10 +1,9 @@
 package edu.berkeley.cs186.database.common;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.function.Function;
 import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.table.Record;
+
+import java.util.Arrays;
 
 /**
  * Hash functions based off of Postgres's hashing functions. hashRecord and

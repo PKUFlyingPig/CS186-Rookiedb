@@ -1,14 +1,14 @@
 package edu.berkeley.cs186.database.cli;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-
 import edu.berkeley.cs186.database.databox.*;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
 import edu.berkeley.cs186.database.table.Table;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
 
 public class PrettyPrinter {
     public static void printTable(Table t) {

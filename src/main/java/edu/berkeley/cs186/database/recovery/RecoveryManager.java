@@ -158,12 +158,27 @@ public interface RecoveryManager extends AutoCloseable {
     void checkpoint();
 
     /**
-     * Called whenever the database starts up, and performs restart recovery. Recovery is
-     * complete when the Runnable returned is run to termination. New transactions may be
-     * started once this method returns.
-     * @return Runnable to run to finish restart recovery
+     * Flushes the log to at least the specified record,
+     * essentially flushing up to and including the page
+     * that contains the record specified by the LSN.
+     *
+     * @param LSN LSN up to which the log should be flushed
      */
-    Runnable restart();
+    void flushToLSN(long LSN);
+
+    /**
+     * Adds the given page number and LSN to the dirty page table if the page
+     * is not already present.
+     * @param pageNum
+     * @param LSN
+     */
+    void dirtyPage(long pageNum, long LSN);
+
+    /**
+     * Called whenever the database starts up, and performs restart recovery.
+     * New transactions may be started once this method returns.
+     */
+    void restart();
 
     /**
      * Clean up: log flush, checkpointing, etc. Called when the database is closed.

@@ -1,7 +1,5 @@
 package edu.berkeley.cs186.database.concurrency;
 
-import edu.berkeley.cs186.database.common.Pair;
-
 public class LoggingLockContext extends LockContext {
     private boolean allowDisable = true;
 

@@ -1,18 +1,14 @@
 package edu.berkeley.cs186.database.table;
 
+import edu.berkeley.cs186.database.DatabaseException;
+import edu.berkeley.cs186.database.common.Buffer;
+import edu.berkeley.cs186.database.databox.*;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-
-import edu.berkeley.cs186.database.DatabaseException;
-import edu.berkeley.cs186.database.common.Buffer;
-import edu.berkeley.cs186.database.databox.DataBox;
-import edu.berkeley.cs186.database.databox.FloatDataBox;
-import edu.berkeley.cs186.database.databox.StringDataBox;
-import edu.berkeley.cs186.database.databox.Type;
-import edu.berkeley.cs186.database.databox.TypeId;
 
 /**
  * The schema of a table includes the name and type of every one of its
@@ -173,7 +169,7 @@ public class Schema {
      * cast to the correct field
      * @return A new record with fields cast to match the schema
      */
-    Record verify(Record record) {
+    public Record verify(Record record) {
         List<DataBox> values = record.getValues();
         if (values.size() != fieldNames.size()) {
             String err = String.format("Expected %d values, but got %d.",

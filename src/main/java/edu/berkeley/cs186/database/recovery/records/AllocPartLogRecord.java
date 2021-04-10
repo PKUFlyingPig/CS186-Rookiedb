@@ -2,11 +2,11 @@ package edu.berkeley.cs186.database.recovery.records;
 
 import edu.berkeley.cs186.database.common.Buffer;
 import edu.berkeley.cs186.database.common.ByteBuffer;
-import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.recovery.LogRecord;
 import edu.berkeley.cs186.database.recovery.LogType;
+import edu.berkeley.cs186.database.recovery.RecoveryManager;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -52,13 +52,13 @@ public class AllocPartLogRecord extends LogRecord {
     }
 
     @Override
-    public Pair<LogRecord, Boolean> undo(long lastLSN) {
-        return new Pair<>(new UndoAllocPartLogRecord(transNum, partNum, lastLSN, prevLSN), true);
+    public LogRecord undo(long lastLSN) {
+        return new UndoAllocPartLogRecord(transNum, partNum, lastLSN, prevLSN);
     }
 
     @Override
-    public void redo(DiskSpaceManager dsm, BufferManager bm) {
-        super.redo(dsm, bm);
+    public void redo(RecoveryManager rm, DiskSpaceManager dsm, BufferManager bm) {
+        super.redo(rm, dsm, bm);
 
         try {
             dsm.allocPart(partNum);

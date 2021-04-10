@@ -12,6 +12,9 @@ public class RookieParserDefaultVisitor implements RookieParserVisitor{
   public void visit(ASTSQLStatementList node, Object data){
     defaultVisit(node, data);
   }
+  public void visit(ASTExecutableStatement node, Object data){
+    defaultVisit(node, data);
+  }
   public void visit(ASTExplainStatement node, Object data){
     defaultVisit(node, data);
   }
@@ -39,7 +42,16 @@ public class RookieParserDefaultVisitor implements RookieParserVisitor{
   public void visit(ASTInsertStatement node, Object data){
     defaultVisit(node, data);
   }
+  public void visit(ASTInsertValues node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTUpdateStatement node, Object data){
+    defaultVisit(node, data);
+  }
   public void visit(ASTSelectStatement node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTCommonTableExpression node, Object data){
     defaultVisit(node, data);
   }
   public void visit(ASTDeleteStatement node, Object data){
@@ -57,13 +69,19 @@ public class RookieParserDefaultVisitor implements RookieParserVisitor{
   public void visit(ASTSelectClause node, Object data){
     defaultVisit(node, data);
   }
-  public void visit(ASTLimit node, Object data){
+  public void visit(ASTLimitClause node, Object data){
     defaultVisit(node, data);
   }
   public void visit(ASTFromClause node, Object data){
     defaultVisit(node, data);
   }
+  public void visit(ASTOrderClause node, Object data){
+    defaultVisit(node, data);
+  }
   public void visit(ASTJoinedTable node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTSelectColumn node, Object data){
     defaultVisit(node, data);
   }
   public void visit(ASTResultColumnName node, Object data){
@@ -72,20 +90,56 @@ public class RookieParserDefaultVisitor implements RookieParserVisitor{
   public void visit(ASTColumnName node, Object data){
     defaultVisit(node, data);
   }
-  public void visit(ASTTableName node, Object data){
-    defaultVisit(node, data);
-  }
   public void visit(ASTIdentifier node, Object data){
     defaultVisit(node, data);
   }
   public void visit(ASTAliasedTableName node, Object data){
     defaultVisit(node, data);
   }
-  public void visit(ASTBinaryExpression node, Object data){
+  public void visit(ASTColumnValueComparison node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTNumericLiteral node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTIntegerLiteral node, Object data){
     defaultVisit(node, data);
   }
   public void visit(ASTLiteral node, Object data){
     defaultVisit(node, data);
   }
+  public void visit(ASTComparisonOperator node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTLogicalOperator node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTMultiplicativeOperator node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTAdditiveOperator node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTExpression node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTLogicalExpression node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTComparisonExpression node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTAdditiveExpression node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTMultiplicativeExpression node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTFunctionCallExpression node, Object data){
+    defaultVisit(node, data);
+  }
+  public void visit(ASTPrimaryExpression node, Object data){
+    defaultVisit(node, data);
+  }
 }
-/* JavaCC - OriginalChecksum=e666adc90e974b87e8f48908f67eb085 (do not edit this line) */
+/* JavaCC - OriginalChecksum=fe82cbcccc3d9be526b69ed82a26672b (do not edit this line) */

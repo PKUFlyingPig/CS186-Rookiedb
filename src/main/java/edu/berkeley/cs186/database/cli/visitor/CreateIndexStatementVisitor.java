@@ -2,7 +2,7 @@ package edu.berkeley.cs186.database.cli.visitor;
 
 import edu.berkeley.cs186.database.Transaction;
 import edu.berkeley.cs186.database.cli.parser.ASTColumnName;
-import edu.berkeley.cs186.database.cli.parser.ASTTableName;
+import edu.berkeley.cs186.database.cli.parser.ASTIdentifier;
 
 public class CreateIndexStatementVisitor extends StatementVisitor {
     public String tableName;
@@ -15,7 +15,7 @@ public class CreateIndexStatementVisitor extends StatementVisitor {
     }
 
     @Override
-    public void visit(ASTTableName node, Object data) {
+    public void visit(ASTIdentifier node, Object data) {
         this.tableName = (String) node.jjtGetValue();
     }
 
@@ -27,9 +27,5 @@ public class CreateIndexStatementVisitor extends StatementVisitor {
     @Override
     public StatementType getType() {
         return StatementType.CREATE_INDEX;
-    }
-
-    public void prettyPrint() {
-        System.out.printf("CREATE INDEX ON %s (%s)\n", tableName, columnName);
     }
 }

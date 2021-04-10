@@ -1,8 +1,5 @@
 package edu.berkeley.cs186.database.table.stats;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import edu.berkeley.cs186.database.common.PredicateOperator;
 import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.databox.Type;
@@ -10,6 +7,9 @@ import edu.berkeley.cs186.database.table.PageDirectory;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
 import edu.berkeley.cs186.database.table.Table;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Every table in a database maintains a set of table statistics which are

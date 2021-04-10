@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
@@ -164,6 +165,8 @@ public abstract class TransactionContext implements AutoCloseable {
     public abstract void deleteRecordWhere(String tableName, String predColumnName, PredicateOperator predOperator,
                                            DataBox predValue);
 
+    public abstract void deleteRecordWhere(String tableName, Function<Record, DataBox> cond);
+
     public abstract Record getRecord(String tableName, RecordId rid);
 
     public abstract RecordId updateRecord(String tableName, RecordId rid, Record updated);
@@ -171,6 +174,8 @@ public abstract class TransactionContext implements AutoCloseable {
     public abstract void updateRecordWhere(String tableName, String targetColumnName,
                                            UnaryOperator<DataBox> targetValue,
                                            String predColumnName, PredicateOperator predOperator, DataBox predValue);
+
+    public abstract void updateRecordWhere(String tableName, String targetColumnName, Function<Record, DataBox> expr, Function<Record, DataBox> cond);
 
     // Table/Schema ////////////////////////////////////////////////////////////
 

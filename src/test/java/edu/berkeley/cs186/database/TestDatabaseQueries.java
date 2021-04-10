@@ -1,27 +1,22 @@
 package edu.berkeley.cs186.database;
 
-import edu.berkeley.cs186.database.categories.*;
+import edu.berkeley.cs186.database.categories.Proj99Tests;
+import edu.berkeley.cs186.database.categories.SystemTests;
 import edu.berkeley.cs186.database.concurrency.DummyLockManager;
-import edu.berkeley.cs186.database.databox.*;
-import org.junit.*;
+import edu.berkeley.cs186.database.query.QueryPlan;
+import edu.berkeley.cs186.database.table.Record;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 
-import edu.berkeley.cs186.database.databox.FloatDataBox;
-import edu.berkeley.cs186.database.databox.StringDataBox;
-import edu.berkeley.cs186.database.query.QueryPlan;
-import edu.berkeley.cs186.database.table.Record;
-import edu.berkeley.cs186.database.table.Schema;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 @Category({Proj99Tests.class})
 public class TestDatabaseQueries {

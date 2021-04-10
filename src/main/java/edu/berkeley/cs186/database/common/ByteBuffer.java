@@ -1,6 +1,6 @@
 package edu.berkeley.cs186.database.common;
 
-import java.nio.*;
+import java.nio.ByteOrder;
 
 /**
  * Wrapper around java.nio.ByteBuffer to implement our Buffer interface.

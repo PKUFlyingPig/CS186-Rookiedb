@@ -42,6 +42,10 @@ TOKEN:
     |   <CLOSE_PAR: ")">
     |   <COMMA: ",">
     |   <STAR: "*">
+    |   <FSLASH: "/">
+    |   <PERCENT: "%">
+    |   <PLUS: "+">
+    |   <MINUS: "-">
     |   <LT: "<">
     |   <LT_EQ: "<=">
     |   <GT: ">">
@@ -71,6 +75,7 @@ TOKEN:
     |   <K_ON: "on">
     |   <K_WHERE: "where">
     |   <K_AND: "and">
+    |   <K_OR: "or">
     |   <K_GROUP: "group">
     |   <K_BY: "by">
     |   <K_LIMIT: "limit">
@@ -91,15 +96,16 @@ TOKEN:
     |   <K_QUERY: "query">
     |   <K_PLAN: "plan">
     |   <K_ANALYZE: "analyze">
+    |   <K_ORDER: "order">
 }
 
 
 /* Literals and Identifier: 186, .186, 186.186, "186", etc... */
 TOKEN: {
     <NUMERIC_LITERAL:
-        (<SIGN>)? <DIGITS> ("." (<DIGIT>)*)? ( "E" (<SIGN>)? <DIGITS>)?
+        <DIGITS> ("." (<DIGIT>)*)? ( "E" (<SIGN>)? <DIGITS>)?
         |  "." <DIGITS> ("E" (<SIGN>)? <DIGITS>)?>
-    | <#DIGITS: ( <DIGIT> )+ >
+    | <DIGITS: ( <DIGIT> )+ >
     | <#DIGIT: ["0" - "9"] >
     | <#SIGN: ["+", "-"]>
     | <STRING_LITERAL: ("'" ( ~["'"] | "''" )* "'") >
@@ -112,7 +118,7 @@ TOKEN: {
 ASTSQLStatementList sql_stmt_list() #SQLStatementList:
 {}
 {
-    (<SCOL>)* sql_stmt() (LOOKAHEAD(2) (<SCOL>)+ sql_stmt())* (<SCOL>)+ {return jjtThis;}
+    (<SCOL>)* sql_stmt() (<SCOL>)+ (sql_stmt() (<SCOL>)+)* {return jjtThis;}
 }
 
 void sql_stmt():
@@ -125,12 +131,33 @@ void sql_stmt():
     |   drop_index_stmt()
     |   insert_stmt()
     |   delete_stmt()
+    |   update_stmt()
     |   begin_stmt()
     |   commit_stmt()
     |   rollback_stmt()
     |   savepoint_stmt()
     |   release_stmt()
     |   explain_stmt()
+}
+
+
+
+ASTExecutableStatement executable_stmt() #ExecutableStatement:
+{}
+{
+       (select_stmt()
+    |   LOOKAHEAD(2) create_table_stmt()
+    |   create_index_stmt()
+    |   LOOKAHEAD(2) drop_table_stmt()
+    |   drop_index_stmt()
+    |   insert_stmt()
+    |   delete_stmt()
+    |   update_stmt()
+    |   commit_stmt()
+    |   rollback_stmt()
+    |   savepoint_stmt()
+    |   release_stmt()
+    |   explain_stmt()) (<SCOL>)? { return jjtThis;}
 }
 
 void explain_stmt() #ExplainStatement:
@@ -142,13 +169,13 @@ void explain_stmt() #ExplainStatement:
 void drop_table_stmt() #DropTableStatement:
 {}
 {
-    <K_DROP> <K_TABLE> table_name()
+    <K_DROP> <K_TABLE> identifier()
 }
 
 void drop_index_stmt() #DropIndexStatement:
 {}
 {
-    <K_DROP> <K_INDEX> table_name() <OPEN_PAR> column_name() <CLOSE_PAR>
+    <K_DROP> <K_INDEX> identifier() <OPEN_PAR> column_name() <CLOSE_PAR>
 }
 
 void release_stmt() #ReleaseStatement:
@@ -185,79 +212,120 @@ void commit_stmt() #CommitStatement:
 void insert_stmt() #InsertStatement:
 {}
 {
-    <K_INSERT> <K_INTO> table_name()
-    <K_VALUES> <OPEN_PAR> literal() (<COMMA> literal())* <CLOSE_PAR>
+    <K_INSERT> <K_INTO> identifier()
+    <K_VALUES> insert_values() (<COMMA> insert_values())*
+}
+
+void insert_values() #InsertValues:
+{}
+{
+    <OPEN_PAR> literal() (<COMMA> literal())* <CLOSE_PAR>
+}
+
+void update_stmt() #UpdateStatement:
+{}
+{
+    <K_UPDATE> identifier() <K_SET> column_name() "=" expression()
+    (<K_WHERE> expression()) ?
 }
 
 void select_stmt() #SelectStatement:
 {}
 {
+    (<K_WITH> common_table_expression() (<COMMA> common_table_expression())*)?
     select_clause()
     from_clause()
-    (<K_WHERE>  binary_expression() (<K_AND> binary_expression())?)?
+    (<K_WHERE>  column_value_comparison() (<K_AND> column_value_comparison())?)?
     (<K_GROUP> <K_BY> column_name() (<COMMA> column_name())*)?
-    (<K_LIMIT> limit())?
+    (order_clause())?
+    (limit_clause())?
+}
+
+void common_table_expression() #CommonTableExpression:
+{}
+{
+    identifier() (<OPEN_PAR> column_name() (<COMMA> column_name())* <CLOSE_PAR> )? <K_AS> <OPEN_PAR> select_stmt() <CLOSE_PAR>
 }
 
 void delete_stmt() #DeleteStatement:
 {}
 {
-    <K_DELETE> <K_FROM> table_name() <K_WHERE> binary_expression()
+    <K_DELETE> <K_FROM> identifier() <K_WHERE> expression()
 }
 
 void create_table_stmt() #CreateTableStatement:
 {}
 {
-    <K_CREATE> <K_TABLE> table_name() <OPEN_PAR> column_def() (<COMMA> column_def())* <CLOSE_PAR>
+    <K_CREATE> <K_TABLE> identifier() ((<OPEN_PAR> column_def() (<COMMA> column_def())* <CLOSE_PAR>) |
+    <K_AS> select_stmt())
 }
 
 void create_index_stmt() #CreateIndexStatement:
 {}
 {
-    <K_CREATE> <K_INDEX> <K_ON> table_name() <OPEN_PAR> column_name() <CLOSE_PAR>
+    <K_CREATE> <K_INDEX> <K_ON> identifier() <OPEN_PAR> column_name() <CLOSE_PAR>
 }
 
 void column_def() #ColumnDef:
+{String i1, i2; Token k = null;}
 {
-    Object[] components = {null, null, null};
-}
-{
-    components[0]=identifier()
-    components[1]=identifier()
-    (<OPEN_PAR>
-        components[2]=<NUMERIC_LITERAL>
-    <CLOSE_PAR>)?
-    {
-        jjtThis.value = components;
+    i1=identifier()
+    i2=identifier()
+    (<OPEN_PAR> k=<DIGITS> <CLOSE_PAR>)? {
+        jjtThis.value = new Object[]{i1, i2, k};
     }
 }
 
 void select_clause() #SelectClause:
 {}
 {
-    <K_SELECT> result_column_name() (<COMMA> result_column_name())*
+    <K_SELECT> select_column() (<COMMA> select_column())*
 }
 
-void limit() #Limit :
-{Token t;}
+void limit_clause() #LimitClause:
+{int n;}
 {
-    t=<NUMERIC_LITERAL> {jjtThis.value = t.image;}
+    <K_LIMIT> n=integer_literal() {jjtThis.value=n;}
 }
 
-//TODO: aliasing
-//TODO: temporary tables
 void from_clause() #FromClause:
-{}
+{String[] atn;}
 {
      <K_FROM> aliased_table_name() (joined_table())*
 }
 
-void joined_table() #JoinedTable:
-{ASTColumnName[] columns = {null, null};}
+void order_clause() #OrderClause:
+{String s;}
 {
-    (<K_INNER>)? <K_JOIN> aliased_table_name() <K_ON> columns[0]=column_name() (<EQ> | <EQEQ>) columns[1]=column_name()
+    <K_ORDER> <K_BY> s=column_name() {
+        jjtThis.value = s;
+    }
+}
+
+void joined_table() #JoinedTable:
+{String column1, column2;}
+{
+    (<K_INNER>)? <K_JOIN> aliased_table_name() <K_ON> column1=column_name() (<EQ> | <EQEQ>) column2=column_name()
     {
-        jjtThis.value = columns;
+        jjtThis.value = new String[]{column1, column2};
+    }
+}
+
+String select_column() #SelectColumn:
+{Token t = null; String s = null;}
+{
+    (t=<STAR> | LOOKAHEAD(3) t=<IDENTIFIER> <DOT> <STAR> | expression() (<K_AS> s=identifier())?) {
+        if (t == null) {
+            jjtThis.value = "<>";
+        } else if (t.image.equals("*")) {
+            jjtThis.value = "*";
+        } else {
+            jjtThis.value = t.image + ".*";
+        }
+        if (s!=null) {
+            jjtThis.value += " AS " + s;
+        }
+        return (String) jjtThis.value;
     }
 }
 
@@ -269,64 +337,151 @@ void result_column_name() #ResultColumnName:
     |   t1=<IDENTIFIER> (<DOT> (t2=<IDENTIFIER> | t2=<STAR>))? {jjtThis.value = t2 != null ? t1.image + "." + t2.image : t1.image;}
 }
 
-ASTColumnName column_name() #ColumnName:
-{Token t1; Token t2=null;}
+String column_name() #ColumnName:
+{Token t; String s = "";}
 {
-    t1=<IDENTIFIER> (<DOT> t2=<IDENTIFIER>)? {
-        jjtThis.value = t2 != null ? t1.image + "." + t2.image : t1.image;
-        return jjtThis;
+    t=<IDENTIFIER> {s += t.image;} (<DOT> t=<IDENTIFIER> {s += "." + t.image;})? {
+        jjtThis.value = s;
+        return s;
     }
 }
 
-String table_name() #TableName:
+String identifier() #Identifier:
 {Token t;}
 {
-    t=<IDENTIFIER> {
-        jjtThis.value = t.image;
-        return t.image;
-    }
-}
-
-String identifier() #Identifier():
-{Token t;}
-{
-    t=<IDENTIFIER> {
-        jjtThis.value = t.image;
-        return t.image;
-    }
+    t=<IDENTIFIER> { jjtThis.value = t.image; return t.image;}
 }
 
 void aliased_table_name() #AliasedTableName:
-{String[] names = {null, null};}
+{String name1, name2=null;}
 {
-    names[0]=table_name() (<K_AS> names[1]=table_name())? {jjtThis.value = names;}
+    name1=identifier() (<K_AS> name2=identifier())? {jjtThis.value = new String[]{name1, name2};}
 }
 
-void binary_expression() #BinaryExpression:
-{Object[] components = {null, null, null}; jjtThis.value = components;}
+void column_value_comparison() #ColumnValueComparison:
+{}
 {
-        (components[0]=column_name() components[1]=binary_operator() components[2]=literal())
-    |   (components[0]=literal() components[1]=binary_operator() components[2]=column_name())
+    column_name() comparison_operator() literal()
+    | literal() comparison_operator() column_name()
+}
+
+String numeric_literal() #NumericLiteral:
+{Token t; jjtThis.value = "";}
+{
+   (t=<PLUS> | t=<MINUS> {jjtThis.value += t.image;})? t=<NUMERIC_LITERAL> {jjtThis.value += t.image; return (String) jjtThis.value;}
+}
+
+int integer_literal() #IntegerLiteral:
+{String s;}
+{
+   s = numeric_literal() {jjtThis.value = Integer.parseInt(s); return Integer.parseInt(s);}
 }
 
 String literal() #Literal:
-{Token t;}
+{Token t=null; String s=null;}
 {
-        t=<STRING_LITERAL> {jjtThis.value = t.image; return t.image;}
-    |   t=<NUMERIC_LITERAL> {jjtThis.value = t.image; return t.image;}
-    |   t=<TRUE> {jjtThis.value = t.image; return t.image;}
-    |   t=<FALSE> {jjtThis.value = t.image; return t.image;}
+    (
+            t=<STRING_LITERAL>
+        |   s=numeric_literal()
+        |   t=<TRUE>
+        |   t=<FALSE>
+    )
+    {
+        if (s != null) jjtThis.value = s;
+        else jjtThis.value=t.image;
+        return (String) jjtThis.value;
+    }
 }
 
-String binary_operator():
+String comparison_operator() #ComparisonOperator:
 {Token t;}
 {
-        t=<EQ> {return t.image;}
-    |   t=<EQEQ> {return t.image;}
-    |   t=<NOT_EQ1> {return t.image;}
-    |   t=<NOT_EQ2> {return t.image;}
-    |   t=<LT_EQ> {return t.image;}
-    |   t=<LT> {return t.image;}
-    |   t=<GT_EQ> {return t.image;}
-    |   t=<GT> {return t.image;}
+    (
+            t=<EQ>
+        |   t=<EQEQ>
+        |   t=<NOT_EQ1>
+        |   t=<NOT_EQ2>
+        |   t=<LT_EQ>
+        |   t=<LT>
+        |   t=<GT_EQ>
+        |   t=<GT>
+    )
+    {
+        jjtThis.value=t.image;
+        return t.image;
+    }
+
+ }
+
+String logical_operator() #LogicalOperator:
+{Token t;}
+{
+    (
+            t=<K_AND>
+        |   t=<K_OR>
+    ) {
+        jjtThis.value=t.image;
+        return t.image;
+    }
+}
+
+String multiplicative_operator() #MultiplicativeOperator:
+{Token t;}
+{
+    (
+            t=<STAR>
+        |   t=<FSLASH>
+        |   t=<PERCENT>
+    ) {
+        jjtThis.value=t.image;
+        return t.image;
+    }
+}
+
+String additive_operator() #AdditiveOperator:
+{Token t;}
+{
+    (
+            t=<PLUS>
+        |   t=<MINUS>
+    ) {
+        jjtThis.value=t.image;
+        return t.image;
+    }
+}
+
+ASTExpression expression() #Expression:
+{}
+{ logical_expression() {return jjtThis;}}
+
+void logical_expression() #LogicalExpression:
+{}
+{ comparison_expression() (LOOKAHEAD(2) logical_operator() comparison_expression() )* }
+
+void comparison_expression() #ComparisonExpression:
+{}
+{ additive_expression() (LOOKAHEAD(2) comparison_operator() additive_expression() )*}
+
+
+void additive_expression() #AdditiveExpression:
+{}
+{ multiplicative_expression() (LOOKAHEAD(2) additive_operator() multiplicative_expression())* }
+
+
+void multiplicative_expression() #MultiplicativeExpression:
+{}
+{ primary_expression() (LOOKAHEAD(2) multiplicative_operator() primary_expression() )* }
+
+void function_call_expression() #FunctionCallExpression:
+{Token t = null;}
+{ identifier() <OPEN_PAR> (t=<STAR> {jjtThis.value = t.image;} | (expression() (<COMMA> expression())*))? <CLOSE_PAR> }
+
+void primary_expression() #PrimaryExpression:
+{}
+{
+        LOOKAHEAD(3) literal()
+    |   LOOKAHEAD(2) function_call_expression()
+    |   LOOKAHEAD(2) column_name()
+    |   <OPEN_PAR> expression() <CLOSE_PAR>
+    |   (additive_operator() primary_expression())
 }

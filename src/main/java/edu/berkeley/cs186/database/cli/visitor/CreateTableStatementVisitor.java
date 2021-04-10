@@ -1,21 +1,35 @@
 package edu.berkeley.cs186.database.cli.visitor;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import edu.berkeley.cs186.database.Transaction;
+import edu.berkeley.cs186.database.cli.parser.ASTColumnDef;
+import edu.berkeley.cs186.database.cli.parser.ASTIdentifier;
+import edu.berkeley.cs186.database.cli.parser.ASTSelectStatement;
+import edu.berkeley.cs186.database.cli.parser.Token;
 import edu.berkeley.cs186.database.databox.Type;
-import edu.berkeley.cs186.database.cli.parser.*;
+import edu.berkeley.cs186.database.query.QueryOperator;
+import edu.berkeley.cs186.database.query.QueryPlan;
+import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 public class CreateTableStatementVisitor extends StatementVisitor {
     public String tableName;
     public List<String> errorMessages = new ArrayList<>();
-    public Schema schema;
+    public Schema schema = new Schema();
+    public SelectStatementVisitor selectStatementVisitor = null;
 
     @Override
-    public void visit(ASTTableName node, Object data) {
+    public void visit(ASTIdentifier node, Object data) {
         this.tableName = (String) node.jjtGetValue();
+    }
+
+    @Override
+    public void visit(ASTSelectStatement node, Object data) {
+        selectStatementVisitor = new SelectStatementVisitor();
+        node.jjtAccept(selectStatementVisitor, data);
     }
 
     @Override
@@ -63,15 +77,6 @@ public class CreateTableStatementVisitor extends StatementVisitor {
         schema.add(fieldName, fieldType);
     }
 
-    public void prettyPrint() {
-        System.out.println("CREATE TABLE " + this.tableName + "(");
-        for(int i = 0; i < schema.size(); i++) {
-            if (i > 0) System.out.println(",");
-            System.out.print("   " + schema.getFieldName(i) + " " + schema.getFieldType(i));
-        }
-        System.out.println("\n)");
-    }
-
     public void execute(Transaction transaction) {
         // transaction
         if (this.errorMessages.size() > 0) {
@@ -80,7 +85,25 @@ public class CreateTableStatementVisitor extends StatementVisitor {
             }
             System.out.println("Failed to execute CREATE TABLE.");
         } else {
-            transaction.createTable(this.schema, this.tableName);
+            if (selectStatementVisitor != null) {
+                QueryPlan p = selectStatementVisitor.getQueryPlan(transaction).get();
+                p.execute();
+                QueryOperator op = p.getFinalOperator();
+                Schema s = op.getSchema();
+                for (int i = 0; i < s.size(); i++) {
+                    if (s.getFieldName(i).contains(".")) {
+                        throw new UnsupportedOperationException("Cannot have `.` in table field name.");
+                    }
+                }
+                transaction.createTable(s, this.tableName);
+                Iterator<Record> records = op.iterator();
+                while (records.hasNext()) {
+                    Record r = records.next();
+                    transaction.insert(this.tableName, r);
+                }
+            } else {
+                transaction.createTable(this.schema, this.tableName);
+            }
             System.out.println("CREATE TABLE " + tableName);
         }
     }

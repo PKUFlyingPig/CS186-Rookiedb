@@ -92,9 +92,13 @@ public class DummyRecoveryManager implements RecoveryManager {
     }
 
     @Override
-    public Runnable restart() {
-        return () -> {};
-    }
+    public void flushToLSN(long LSN) {}
+
+    @Override
+    public void dirtyPage(long pageNum, long LSN) {}
+
+    @Override
+    public void restart() {}
 
     @Override
     public void close() {}

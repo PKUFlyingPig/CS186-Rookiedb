@@ -2,13 +2,13 @@ package edu.berkeley.cs186.database.recovery.records;
 
 import edu.berkeley.cs186.database.common.Buffer;
 import edu.berkeley.cs186.database.common.ByteBuffer;
-import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.DummyLockContext;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.recovery.LogRecord;
 import edu.berkeley.cs186.database.recovery.LogType;
+import edu.berkeley.cs186.database.recovery.RecoveryManager;
 
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -52,16 +52,16 @@ public class FreePageLogRecord extends LogRecord {
     }
 
     @Override
-    public Pair<LogRecord, Boolean> undo(long lastLSN) {
-        return new Pair<>(new UndoFreePageLogRecord(transNum, pageNum, lastLSN, prevLSN), true);
+    public LogRecord undo(long lastLSN) {
+        return new UndoFreePageLogRecord(transNum, pageNum, lastLSN, prevLSN);
     }
 
     @Override
-    public void redo(DiskSpaceManager dsm, BufferManager bm) {
-        super.redo(dsm, bm);
+    public void redo(RecoveryManager rm, DiskSpaceManager dsm, BufferManager bm) {
+        super.redo(rm, dsm, bm);
 
         try {
-            Page p = bm.fetchPage(new DummyLockContext(), pageNum);
+            Page p = bm.fetchPage(new DummyLockContext("_dummyFreePageRecord"), pageNum);
             bm.freePage(p);
             p.unpin();
         } catch (NoSuchElementException e) {

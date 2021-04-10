@@ -8,6 +8,7 @@ import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.recovery.LogRecord;
 import edu.berkeley.cs186.database.recovery.LogType;
+import edu.berkeley.cs186.database.recovery.RecoveryManager;
 
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -53,11 +54,13 @@ public class UndoAllocPageLogRecord extends LogRecord {
     }
 
     @Override
-    public void redo(DiskSpaceManager dsm, BufferManager bm) {
-        super.redo(dsm, bm);
-
+    public void redo(RecoveryManager rm, DiskSpaceManager dsm, BufferManager bm) {
+        // Freed page will disappear on disk after freePage is called,
+        // so we must flush up to this record before calling it.
+        rm.flushToLSN(getLSN());
+        super.redo(rm, dsm, bm);
         try {
-            Page p = bm.fetchPage(new DummyLockContext(), pageNum);
+            Page p = bm.fetchPage(new DummyLockContext("_dummyUndoAllocPageRecord"), pageNum);
             bm.freePage(p);
             p.unpin();
         } catch (NoSuchElementException e) {

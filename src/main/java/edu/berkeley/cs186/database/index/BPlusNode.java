@@ -1,8 +1,5 @@
 package edu.berkeley.cs186.database.index;
 
-import java.util.Iterator;
-import java.util.Optional;
-
 import edu.berkeley.cs186.database.common.Buffer;
 import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.LockContext;
@@ -10,6 +7,9 @@ import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.table.RecordId;
+
+import java.util.Iterator;
+import java.util.Optional;
 
 /**
  * An inner node or a leaf node. See InnerNode and LeafNode for more

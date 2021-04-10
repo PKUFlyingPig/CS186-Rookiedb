@@ -1,18 +1,18 @@
 package edu.berkeley.cs186.database.cli.visitor;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
 import edu.berkeley.cs186.database.Database;
 import edu.berkeley.cs186.database.Transaction;
 import edu.berkeley.cs186.database.cli.parser.*;
 
-public class RookieParserVisitor extends RookieParserDefaultVisitor {
-    private Database database;
-    private List<StatementVisitor> statementVisitors;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
-    public RookieParserVisitor(Database database) {
+public class StatementListVisitor extends RookieParserDefaultVisitor {
+    private Database database;
+    public List<StatementVisitor> statementVisitors;
+
+    public StatementListVisitor(Database database) {
         this.database = database;
         this.statementVisitors = new ArrayList<>();
     }
@@ -135,9 +135,14 @@ public class RookieParserVisitor extends RookieParserDefaultVisitor {
      */
     @Override
     public void visit(ASTSelectStatement node, Object data) {
-        SelectStatementVisitor visitor = new SelectStatementVisitor();
-        node.childrenAccept(visitor, null);
-        this.statementVisitors.add(visitor);
+        try {
+            SelectStatementVisitor visitor = new SelectStatementVisitor();
+            node.childrenAccept(visitor, null);
+            this.statementVisitors.add(visitor);
+        } catch (UnsupportedOperationException e) {
+            System.out.println("Failed to execute SELECT");
+            System.out.println(e.getMessage());
+        }
     }
 
     /**
@@ -196,6 +201,16 @@ public class RookieParserVisitor extends RookieParserDefaultVisitor {
     @Override
     public void visit(ASTDeleteStatement node, Object data) {
         DeleteStatementVisitor visitor = new DeleteStatementVisitor();
+        node.childrenAccept(visitor, null);
+        this.statementVisitors.add(visitor);
+    }
+
+    /**
+     * UPDATE
+     */
+    @Override
+    public void visit(ASTUpdateStatement node, Object data) {
+        UpdateStatementVisitor visitor = new UpdateStatementVisitor();
         node.childrenAccept(visitor, null);
         this.statementVisitors.add(visitor);
     }

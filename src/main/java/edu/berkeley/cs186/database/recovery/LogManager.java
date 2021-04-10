@@ -28,7 +28,7 @@ import java.util.*;
  * by an empty begin and end checkpoint record. The master record is the only record in the
  * entire log that may be rewritten.
  *
- * The LogManager also is responsible for writing pageLSNs onto pages and flushing the log
+ * The LogManager is also responsible for writing pageLSNs onto pages and flushing the log
  * when pages are flushed, and therefore has a few methods that must be called by the buffer
  * manager when pages are fetched and evicted (fetchPageHook, fetchNewPageHook, and pageEvictHook).
  * These must be called from the buffer manager to ensure that pageLSN is up to date, and
@@ -48,7 +48,7 @@ public class LogManager implements Iterable<LogRecord>, AutoCloseable {
         this.bufferManager = bufferManager;
         this.unflushedLogTail = new ArrayDeque<>();
 
-        this.logTail = bufferManager.fetchNewPage(new DummyLockContext(), LOG_PARTITION);
+        this.logTail = bufferManager.fetchNewPage(new DummyLockContext("_dummyLogPageRecord"), LOG_PARTITION);
         this.unflushedLogTail.add(this.logTail);
         this.logTailBuffer = this.logTail.getBuffer();
         this.logTail.unpin();
@@ -61,7 +61,7 @@ public class LogManager implements Iterable<LogRecord>, AutoCloseable {
      * @param record log record to replace first record with
      */
     public synchronized void rewriteMasterRecord(MasterLogRecord record) {
-        Page firstPage = bufferManager.fetchPage(new DummyLockContext(), LOG_PARTITION);
+        Page firstPage = bufferManager.fetchPage(new DummyLockContext("_dummyLogPageRecord"), LOG_PARTITION);
         try {
             firstPage.getBuffer().put(record.toBytes());
             firstPage.flush();
@@ -81,7 +81,7 @@ public class LogManager implements Iterable<LogRecord>, AutoCloseable {
         do {
             if (logTailBuffer == null || bytes.length > DiskSpaceManager.PAGE_SIZE - logTailBuffer.position()) {
                 logTailPinned = true;
-                logTail = bufferManager.fetchNewPage(new DummyLockContext(), LOG_PARTITION);
+                logTail = bufferManager.fetchNewPage(new DummyLockContext("_dummyLogPageRecord"), LOG_PARTITION);
                 unflushedLogTail.add(logTail);
                 logTailBuffer = logTail.getBuffer();
             } else {
@@ -111,7 +111,7 @@ public class LogManager implements Iterable<LogRecord>, AutoCloseable {
      */
     public LogRecord fetchLogRecord(long LSN) {
         try {
-            Page logPage = bufferManager.fetchPage(new DummyLockContext(), getLSNPage(LSN));
+            Page logPage = bufferManager.fetchPage(new DummyLockContext("_dummyLogPageRecord"), getLSNPage(LSN));
             try {
                 Buffer buf = logPage.getBuffer();
                 buf.position(getLSNIndex(LSN));

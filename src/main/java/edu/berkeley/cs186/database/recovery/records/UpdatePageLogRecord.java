@@ -2,26 +2,34 @@ package edu.berkeley.cs186.database.recovery.records;
 
 import edu.berkeley.cs186.database.common.Buffer;
 import edu.berkeley.cs186.database.common.ByteBuffer;
-import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.DummyLockContext;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.recovery.LogRecord;
 import edu.berkeley.cs186.database.recovery.LogType;
+import edu.berkeley.cs186.database.recovery.RecoveryManager;
 
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
 
 public class UpdatePageLogRecord extends LogRecord {
-    private long transNum;
-    private long pageNum;
-    private long prevLSN;
-    public short offset;
-    public byte[] before;
-    public byte[] after;
+    private long transNum; // transaction that updated the page
+    private long pageNum; // page that was updated
+    private long prevLSN; // previous log's LSN
+    public short offset; // position of first changed byte
+    public byte[] before; // old bytes (before update)
+    public byte[] after; // new bytes (after update)
 
+    /**
+     * @param transNum transaction number of transaction that updated the page
+     * @param pageNum the page that was updated
+     * @param prevLSN previous log's LSNS
+     * @param offset position of first changed byte
+     * @param before old bytes (before update)
+     * @param after new bytes (after update)
+     */
     public UpdatePageLogRecord(long transNum, long pageNum, long prevLSN, short offset, byte[] before,
                         byte[] after) {
         super(LogType.UPDATE_PAGE);
@@ -29,8 +37,8 @@ public class UpdatePageLogRecord extends LogRecord {
         this.pageNum = pageNum;
         this.prevLSN = prevLSN;
         this.offset = offset;
-        this.before = before == null ? new byte[0] : before;
-        this.after = after == null ? new byte[0] : after;
+        this.before = before;
+        this.after = after;
     }
 
     @Override
@@ -49,29 +57,24 @@ public class UpdatePageLogRecord extends LogRecord {
     }
 
     @Override
-    public boolean isUndoable() {
-        return before.length > 0;
-    }
+    public boolean isUndoable() { return true; }
 
     @Override
-    public boolean isRedoable() {
-        return after.length > 0;
-    }
+    public boolean isRedoable() { return true; }
 
     @Override
-    public Pair<LogRecord, Boolean> undo(long lastLSN) {
+    public LogRecord undo(long lastLSN) {
         if (!isUndoable()) {
             throw new UnsupportedOperationException("cannot undo this record: " + this);
         }
-        return new Pair<>(new UndoUpdatePageLogRecord(transNum, pageNum, lastLSN, prevLSN, offset, before),
-                          false);
+        return new UndoUpdatePageLogRecord(transNum, pageNum, lastLSN, prevLSN, offset, before);
     }
 
     @Override
-    public void redo(DiskSpaceManager dsm, BufferManager bm) {
-        super.redo(dsm, bm);
+    public void redo(RecoveryManager rm, DiskSpaceManager dsm, BufferManager bm) {
+        super.redo(rm, dsm, bm);
 
-        Page page = bm.fetchPage(new DummyLockContext(), pageNum);
+        Page page = bm.fetchPage(new DummyLockContext("_dummyUpdatePageRecord"), pageNum);
         try {
             page.getBuffer().position(offset).put(after);
             page.setPageLSN(getLSN());

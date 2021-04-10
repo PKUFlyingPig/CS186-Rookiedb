@@ -1,11 +1,11 @@
 package edu.berkeley.cs186.database.cli.visitor;
 
+import edu.berkeley.cs186.database.cli.parser.ASTIdentifier;
+import edu.berkeley.cs186.database.databox.DataBox;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-
-import edu.berkeley.cs186.database.databox.DataBox;
-import edu.berkeley.cs186.database.cli.parser.*;
 
 public class RollbackStatementVisitor extends StatementVisitor {
     public String savepointName;

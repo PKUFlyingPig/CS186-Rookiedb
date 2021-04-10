@@ -1,10 +1,9 @@
 package edu.berkeley.cs186.database.concurrency;
 
-import edu.berkeley.cs186.database.common.Pair;
-
-import java.util.*;
-
-import static java.util.stream.Collectors.toList;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * This class represents the full name of a resource. The name of a resource is

@@ -5,35 +5,54 @@ public interface RookieParserTreeConstants
 {
   public int JJTSQLSTATEMENTLIST = 0;
   public int JJTVOID = 1;
-  public int JJTEXPLAINSTATEMENT = 2;
-  public int JJTDROPTABLESTATEMENT = 3;
-  public int JJTDROPINDEXSTATEMENT = 4;
-  public int JJTRELEASESTATEMENT = 5;
-  public int JJTSAVEPOINTSTATEMENT = 6;
-  public int JJTROLLBACKSTATEMENT = 7;
-  public int JJTBEGINSTATEMENT = 8;
-  public int JJTCOMMITSTATEMENT = 9;
-  public int JJTINSERTSTATEMENT = 10;
-  public int JJTSELECTSTATEMENT = 11;
-  public int JJTDELETESTATEMENT = 12;
-  public int JJTCREATETABLESTATEMENT = 13;
-  public int JJTCREATEINDEXSTATEMENT = 14;
-  public int JJTCOLUMNDEF = 15;
-  public int JJTSELECTCLAUSE = 16;
-  public int JJTLIMIT = 17;
-  public int JJTFROMCLAUSE = 18;
-  public int JJTJOINEDTABLE = 19;
-  public int JJTRESULTCOLUMNNAME = 20;
-  public int JJTCOLUMNNAME = 21;
-  public int JJTTABLENAME = 22;
-  public int JJTIDENTIFIER = 23;
-  public int JJTALIASEDTABLENAME = 24;
-  public int JJTBINARYEXPRESSION = 25;
-  public int JJTLITERAL = 26;
+  public int JJTEXECUTABLESTATEMENT = 2;
+  public int JJTEXPLAINSTATEMENT = 3;
+  public int JJTDROPTABLESTATEMENT = 4;
+  public int JJTDROPINDEXSTATEMENT = 5;
+  public int JJTRELEASESTATEMENT = 6;
+  public int JJTSAVEPOINTSTATEMENT = 7;
+  public int JJTROLLBACKSTATEMENT = 8;
+  public int JJTBEGINSTATEMENT = 9;
+  public int JJTCOMMITSTATEMENT = 10;
+  public int JJTINSERTSTATEMENT = 11;
+  public int JJTINSERTVALUES = 12;
+  public int JJTUPDATESTATEMENT = 13;
+  public int JJTSELECTSTATEMENT = 14;
+  public int JJTCOMMONTABLEEXPRESSION = 15;
+  public int JJTDELETESTATEMENT = 16;
+  public int JJTCREATETABLESTATEMENT = 17;
+  public int JJTCREATEINDEXSTATEMENT = 18;
+  public int JJTCOLUMNDEF = 19;
+  public int JJTSELECTCLAUSE = 20;
+  public int JJTLIMITCLAUSE = 21;
+  public int JJTFROMCLAUSE = 22;
+  public int JJTORDERCLAUSE = 23;
+  public int JJTJOINEDTABLE = 24;
+  public int JJTSELECTCOLUMN = 25;
+  public int JJTRESULTCOLUMNNAME = 26;
+  public int JJTCOLUMNNAME = 27;
+  public int JJTIDENTIFIER = 28;
+  public int JJTALIASEDTABLENAME = 29;
+  public int JJTCOLUMNVALUECOMPARISON = 30;
+  public int JJTNUMERICLITERAL = 31;
+  public int JJTINTEGERLITERAL = 32;
+  public int JJTLITERAL = 33;
+  public int JJTCOMPARISONOPERATOR = 34;
+  public int JJTLOGICALOPERATOR = 35;
+  public int JJTMULTIPLICATIVEOPERATOR = 36;
+  public int JJTADDITIVEOPERATOR = 37;
+  public int JJTEXPRESSION = 38;
+  public int JJTLOGICALEXPRESSION = 39;
+  public int JJTCOMPARISONEXPRESSION = 40;
+  public int JJTADDITIVEEXPRESSION = 41;
+  public int JJTMULTIPLICATIVEEXPRESSION = 42;
+  public int JJTFUNCTIONCALLEXPRESSION = 43;
+  public int JJTPRIMARYEXPRESSION = 44;
 
   public String[] jjtNodeName = {
     "SQLStatementList",
     "void",
+    "ExecutableStatement",
     "ExplainStatement",
     "DropTableStatement",
     "DropIndexStatement",
@@ -43,22 +62,39 @@ public interface RookieParserTreeConstants
     "BeginStatement",
     "CommitStatement",
     "InsertStatement",
+    "InsertValues",
+    "UpdateStatement",
     "SelectStatement",
+    "CommonTableExpression",
     "DeleteStatement",
     "CreateTableStatement",
     "CreateIndexStatement",
     "ColumnDef",
     "SelectClause",
-    "Limit",
+    "LimitClause",
     "FromClause",
+    "OrderClause",
     "JoinedTable",
+    "SelectColumn",
     "ResultColumnName",
     "ColumnName",
-    "TableName",
     "Identifier",
     "AliasedTableName",
-    "BinaryExpression",
+    "ColumnValueComparison",
+    "NumericLiteral",
+    "IntegerLiteral",
     "Literal",
+    "ComparisonOperator",
+    "LogicalOperator",
+    "MultiplicativeOperator",
+    "AdditiveOperator",
+    "Expression",
+    "LogicalExpression",
+    "ComparisonExpression",
+    "AdditiveExpression",
+    "MultiplicativeExpression",
+    "FunctionCallExpression",
+    "PrimaryExpression",
   };
 }
-/* JavaCC - OriginalChecksum=89417c3b8da500b2f11a29bcc29e31a0 (do not edit this line) */
+/* JavaCC - OriginalChecksum=a489df6fdcb35f7b2ac1cdfa66199fcf (do not edit this line) */

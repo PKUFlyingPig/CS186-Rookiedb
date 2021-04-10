@@ -6,7 +6,6 @@ import edu.berkeley.cs186.database.common.PredicateOperator;
 import edu.berkeley.cs186.database.common.iterator.BacktrackingIterator;
 import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.index.BPlusTreeMetadata;
-import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.query.QueryPlan;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.RecordId;
@@ -16,8 +15,9 @@ import edu.berkeley.cs186.database.table.stats.TableStats;
 
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
@@ -49,6 +49,11 @@ class DummyTransaction extends Transaction {
     }
 
     @Override
+    public String toString() {
+        return "DummyTransaction #" + transNum;
+    }
+
+    @Override
     protected void startCommit() {}
 
     @Override
@@ -58,6 +63,11 @@ class DummyTransaction extends Transaction {
     public void cleanup() {
         assert (!cleanedUp && getStatus() != Status.COMPLETE);
         cleanedUp = true;
+    }
+
+    @Override
+    public Optional<QueryPlan> execute(String statement) {
+        return Optional.empty();
     }
 
     @Override
@@ -101,8 +111,14 @@ class DummyTransaction extends Transaction {
                        String predColumnName, PredicateOperator predOperator, DataBox predValue) {}
 
     @Override
+    public void update(String tableName, String targetColumnName, Function<Record, DataBox> expr, Function<Record, DataBox> cond) { }
+
+    @Override
     public void delete(String tableName, String predColumnName, PredicateOperator predOperator,
                        DataBox predValue) {}
+
+    @Override
+    public void delete(String tableName, Function<Record, DataBox> cond) { }
 
     @Override
     public void savepoint(String savepointName) {}
@@ -210,8 +226,14 @@ class DummyTransaction extends Transaction {
                                       DataBox predValue) {}
 
         @Override
+        public void updateRecordWhere(String tableName, String targetColumnName, Function<Record, DataBox> expr, Function<Record, DataBox> cond) { }
+
+        @Override
         public void deleteRecordWhere(String tableName, String predColumnName,
                                       PredicateOperator predOperator, DataBox predValue) {}
+
+        @Override
+        public void deleteRecordWhere(String tableName, Function<Record, DataBox> cond) { }
 
         @Override
         public Schema getSchema(String tableName) {

@@ -1,12 +1,13 @@
 package edu.berkeley.cs186.database.query.join;
 
-import java.util.*;
-
 import edu.berkeley.cs186.database.TransactionContext;
 import edu.berkeley.cs186.database.common.iterator.BacktrackingIterator;
 import edu.berkeley.cs186.database.query.JoinOperator;
 import edu.berkeley.cs186.database.query.QueryOperator;
 import edu.berkeley.cs186.database.table.Record;
+
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 /**
  * Performs an equijoin between two relations on leftColumnName and

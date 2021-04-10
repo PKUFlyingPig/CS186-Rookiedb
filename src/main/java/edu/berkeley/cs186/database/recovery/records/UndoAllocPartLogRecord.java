@@ -6,6 +6,7 @@ import edu.berkeley.cs186.database.io.DiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.recovery.LogRecord;
 import edu.berkeley.cs186.database.recovery.LogType;
+import edu.berkeley.cs186.database.recovery.RecoveryManager;
 
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -51,9 +52,11 @@ public class UndoAllocPartLogRecord extends LogRecord {
     }
 
     @Override
-    public void redo(DiskSpaceManager dsm, BufferManager bm) {
-        super.redo(dsm, bm);
-
+    public void redo(RecoveryManager rm, DiskSpaceManager dsm, BufferManager bm) {
+        // Freed partition will disappear on disk after freePart is called,
+        // so we must flush up to this record before calling it.
+        rm.flushToLSN(getLSN());
+        super.redo(rm, dsm, bm);
         try {
             dsm.freePart(partNum);
         } catch (NoSuchElementException e) {

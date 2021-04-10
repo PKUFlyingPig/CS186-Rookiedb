@@ -1,13 +1,13 @@
 package edu.berkeley.cs186.database.query;
 
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-
 import edu.berkeley.cs186.database.common.PredicateOperator;
 import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
 import edu.berkeley.cs186.database.table.stats.TableStats;
+
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 public class SelectOperator extends QueryOperator {
     private int columnIndex;

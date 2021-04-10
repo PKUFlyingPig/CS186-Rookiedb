@@ -1,25 +1,28 @@
 package edu.berkeley.cs186.database.query;
 
-import edu.berkeley.cs186.database.*;
-import edu.berkeley.cs186.database.categories.*;
+import edu.berkeley.cs186.database.Database;
+import edu.berkeley.cs186.database.TestUtils;
+import edu.berkeley.cs186.database.TimeoutScaling;
+import edu.berkeley.cs186.database.Transaction;
+import edu.berkeley.cs186.database.categories.HiddenTests;
+import edu.berkeley.cs186.database.categories.Proj3Part2Tests;
+import edu.berkeley.cs186.database.categories.Proj3Tests;
+import edu.berkeley.cs186.database.categories.PublicTests;
 import edu.berkeley.cs186.database.common.PredicateOperator;
-import org.junit.*;
+import edu.berkeley.cs186.database.table.Record;
+import edu.berkeley.cs186.database.table.Schema;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TemporaryFolder;
+import org.junit.rules.TestRule;
+import org.junit.rules.Timeout;
 
 import java.io.File;
 import java.util.Collections;
-
-import edu.berkeley.cs186.database.table.Schema;
-
-import edu.berkeley.cs186.database.table.Record;
-import edu.berkeley.cs186.database.databox.IntDataBox;
-import edu.berkeley.cs186.database.databox.BoolDataBox;
-
-import edu.berkeley.cs186.database.TimeoutScaling;
-import org.junit.rules.DisableOnDebug;
-import org.junit.rules.TestRule;
-import org.junit.rules.Timeout;
 
 import static org.junit.Assert.assertTrue;
 

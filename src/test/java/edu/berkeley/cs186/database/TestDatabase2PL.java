@@ -1,23 +1,25 @@
 package edu.berkeley.cs186.database;
 
-import edu.berkeley.cs186.database.categories.*;
-import edu.berkeley.cs186.database.common.PredicateOperator;
-import edu.berkeley.cs186.database.concurrency.*;
-import edu.berkeley.cs186.database.databox.DataBox;
-import edu.berkeley.cs186.database.databox.IntDataBox;
-import edu.berkeley.cs186.database.query.QueryPlan;
+import edu.berkeley.cs186.database.categories.Proj4Part2Tests;
+import edu.berkeley.cs186.database.categories.Proj4Tests;
+import edu.berkeley.cs186.database.categories.PublicTests;
+import edu.berkeley.cs186.database.concurrency.LoggingLockManager;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.RecordId;
 import edu.berkeley.cs186.database.table.Schema;
 import org.junit.*;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.*;
+import org.junit.rules.DisableOnDebug;
+import org.junit.rules.TemporaryFolder;
+import org.junit.rules.TestRule;
+import org.junit.rules.Timeout;
 
 import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 @Category({Proj4Tests.class, Proj4Part2Tests.class})
 public class TestDatabase2PL {

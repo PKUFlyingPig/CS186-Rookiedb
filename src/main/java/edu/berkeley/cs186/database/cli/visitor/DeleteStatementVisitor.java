@@ -1,45 +1,33 @@
 package edu.berkeley.cs186.database.cli.visitor;
 
 import edu.berkeley.cs186.database.Transaction;
-import edu.berkeley.cs186.database.databox.DataBox;
-import edu.berkeley.cs186.database.cli.PrettyPrinter;
-import edu.berkeley.cs186.database.cli.parser.*;
-import edu.berkeley.cs186.database.common.PredicateOperator;
+import edu.berkeley.cs186.database.cli.parser.ASTExpression;
+import edu.berkeley.cs186.database.cli.parser.ASTIdentifier;
+import edu.berkeley.cs186.database.query.aggr.DataFunction;
+import edu.berkeley.cs186.database.table.Schema;
 
 public class DeleteStatementVisitor extends StatementVisitor {
     public String tableName;
-    public String predColumnName;
-    public PredicateOperator predOperator;
-    public DataBox predValue;
+    public DataFunction cond;
 
     @Override
-    public void visit(ASTTableName node, Object data) {
+    public void visit(ASTIdentifier node, Object data) {
         this.tableName = (String) node.jjtGetValue();
     }
 
     @Override
-    public void visit(ASTBinaryExpression node, Object data) {
-        Object[] components = (Object[]) node.jjtGetValue();
-        Object colComp = components[0];
-        Object opComp = components[1];
-        Object valComp = components[2];
-        PredicateOperator op = PredicateOperator.fromSymbol((String) opComp);
-        if (!(components[0] instanceof ASTColumnName)) {
-            colComp = components[2];
-            valComp = components[0];
-            op = op.reverse();
-        }
-        String col = (String) ((ASTColumnName) colComp).jjtGetValue();
-        DataBox val = PrettyPrinter.parseLiteral((String) valComp);
-        this.predColumnName = col;
-        this.predOperator = op;
-        this.predValue = val;
+    public void visit(ASTExpression node, Object data) {
+        ExpressionVisitor visitor = new ExpressionVisitor();
+        node.jjtAccept(visitor, data);
+        this.cond = visitor.build();
     }
 
     @Override
     public void execute(Transaction transaction) {
         try {
-            transaction.delete(tableName, predColumnName, predOperator, predValue);
+            Schema schema = transaction.getSchema(tableName);
+            this.cond.setSchema(schema);
+            transaction.delete(tableName, cond::evaluate);
             System.out.println("DELETE");
         } catch (Exception e) {
             System.out.println(e.getMessage());

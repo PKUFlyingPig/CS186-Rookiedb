@@ -1,14 +1,7 @@
 package edu.berkeley.cs186.database.query;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-
 import edu.berkeley.cs186.database.TransactionContext;
-import edu.berkeley.cs186.database.common.iterator.BacktrackingIterator;
 import edu.berkeley.cs186.database.databox.DataBox;
-import edu.berkeley.cs186.database.databox.Type;
-import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
 import edu.berkeley.cs186.database.table.stats.TableStats;
@@ -79,13 +72,6 @@ public abstract class JoinOperator extends QueryOperator {
         // Set up join column attributes
         this.leftColumnIndex = leftSchema.findField(this.leftColumnName);
         this.rightColumnIndex = rightSchema.findField(this.rightColumnName);
-
-        // Check that the types of the columns of each input operator match
-        if (!leftSchema.getFieldType(this.leftColumnIndex).getTypeId().equals(
-                rightSchema.getFieldType(this.rightColumnIndex).getTypeId())) {
-            throw new RuntimeException("Mismatched types of columns " + leftColumnName + " and "
-                    + rightColumnName + ".");
-        }
 
         // Return concatenated schema
         return leftSchema.concat(rightSchema);
@@ -180,9 +166,10 @@ public abstract class JoinOperator extends QueryOperator {
     // Helpers /////////////////////////////////////////////////////////////////
 
     /**
-     * @return 0 if leftRecord and rightRecord match on their join values, -1 if
-     * leftRecord's join value is less than rightRecord's join value, 1 if
-     * leftRecord's join value is greater than rightRecord's join value.
+     * @return 0 if leftRecord and rightRecord match on their join values,
+     * a negative value if leftRecord's join value is less than rightRecord's
+     * join value, or a positive value if leftRecord's join value is greater
+     * than rightRecord's join value.
      */
     public int compare(Record leftRecord, Record rightRecord) {
         DataBox leftRecordValue = leftRecord.getValue(this.leftColumnIndex);

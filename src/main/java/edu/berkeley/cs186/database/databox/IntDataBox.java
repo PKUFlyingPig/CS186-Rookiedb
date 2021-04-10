@@ -50,6 +50,16 @@ public class IntDataBox extends DataBox {
 
     @Override
     public int compareTo(DataBox d) {
+        if (d instanceof LongDataBox) {
+            long l = d.getLong();
+            if (i == l) return 0;
+            return i > l ? 1 : -1;
+        }
+        if (d instanceof FloatDataBox) {
+            float f = d.getFloat();
+            if (i == f) return 0;
+            return i > f ? 1 : -1;
+        }
         if (!(d instanceof IntDataBox)) {
             String err = String.format("Invalid comparison between %s and %s.",
                                        toString(), d.toString());

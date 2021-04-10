@@ -1,31 +1,43 @@
 package edu.berkeley.cs186.database;
 
+import edu.berkeley.cs186.database.cli.parser.ASTExecutableStatement;
+import edu.berkeley.cs186.database.cli.parser.ParseException;
+import edu.berkeley.cs186.database.cli.parser.RookieParser;
+import edu.berkeley.cs186.database.cli.visitor.ExecutableStatementVisitor;
+import edu.berkeley.cs186.database.common.ByteBuffer;
+import edu.berkeley.cs186.database.common.Pair;
+import edu.berkeley.cs186.database.common.PredicateOperator;
+import edu.berkeley.cs186.database.common.iterator.BacktrackingIterator;
+import edu.berkeley.cs186.database.concurrency.*;
+import edu.berkeley.cs186.database.databox.DataBox;
+import edu.berkeley.cs186.database.databox.Type;
+import edu.berkeley.cs186.database.index.BPlusTree;
+import edu.berkeley.cs186.database.index.BPlusTreeMetadata;
+import edu.berkeley.cs186.database.io.DiskSpaceManager;
+import edu.berkeley.cs186.database.io.DiskSpaceManagerImpl;
+import edu.berkeley.cs186.database.memory.BufferManager;
+import edu.berkeley.cs186.database.memory.ClockEvictionPolicy;
+import edu.berkeley.cs186.database.memory.EvictionPolicy;
+import edu.berkeley.cs186.database.query.QueryPlan;
+import edu.berkeley.cs186.database.query.SequentialScanOperator;
+import edu.berkeley.cs186.database.query.SortOperator;
+import edu.berkeley.cs186.database.query.aggr.DataFunction;
+import edu.berkeley.cs186.database.recovery.ARIESRecoveryManager;
+import edu.berkeley.cs186.database.recovery.DummyRecoveryManager;
+import edu.berkeley.cs186.database.recovery.RecoveryManager;
+import edu.berkeley.cs186.database.table.*;
+import edu.berkeley.cs186.database.table.stats.TableStats;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Phaser;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
-
-import edu.berkeley.cs186.database.common.ByteBuffer;
-import edu.berkeley.cs186.database.common.PredicateOperator;
-import edu.berkeley.cs186.database.common.iterator.BacktrackingIterator;
-import edu.berkeley.cs186.database.common.Pair;
-import edu.berkeley.cs186.database.concurrency.*;
-import edu.berkeley.cs186.database.databox.*;
-import edu.berkeley.cs186.database.index.BPlusTree;
-import edu.berkeley.cs186.database.index.BPlusTreeMetadata;
-import edu.berkeley.cs186.database.io.*;
-import edu.berkeley.cs186.database.memory.*;
-import edu.berkeley.cs186.database.query.QueryPlan;
-import edu.berkeley.cs186.database.query.SequentialScanOperator;
-import edu.berkeley.cs186.database.query.SortOperator;
-import edu.berkeley.cs186.database.recovery.*;
-import edu.berkeley.cs186.database.table.*;
-import edu.berkeley.cs186.database.table.Record;
-import edu.berkeley.cs186.database.table.stats.TableStats;
 
 /**
  * Database objects keeps track of transactions, tables, and indices
@@ -68,7 +80,7 @@ public class Database implements AutoCloseable {
     private static final String INDEX_INFO_TABLE_NAME = METADATA_TABLE_PREFIX + "indices";
     private static final int DEFAULT_BUFFER_SIZE = 262144; // default of 1G
     // effective page size - table metadata size
-    private static final int MAX_SCHEMA_SIZE = 4005;
+    private static final int MAX_SCHEMA_SIZE = 4006;
 
     // _metadata.tables, manages all tables in the database
     private Table tableMetadata;
@@ -85,8 +97,6 @@ public class Database implements AutoCloseable {
     private final BufferManager bufferManager;
     // recovery manager
     private final RecoveryManager recoveryManager;
-    // thread pool for background tasks
-    private final ExecutorService executor;
 
     // number of pages of memory to use for joins, etc.
     private int workMem = 1024; // default of 4M
@@ -165,11 +175,9 @@ public class Database implements AutoCloseable {
         numTransactions = 0;
         this.numMemoryPages = numMemoryPages;
         this.lockManager = lockManager;
-        this.executor = new ThreadPool();
 
         if (useRecoveryManager) {
-            recoveryManager = new ARIESRecoveryManager(lockManager.databaseContext(),
-                    this::beginRecoveryTransaction, this::setTransactionCounter, this::getTransactionCounter);
+            recoveryManager = new ARIESRecoveryManager(this::beginRecoveryTransaction);
         } else {
             recoveryManager = new DummyRecoveryManager();
         }
@@ -178,21 +186,13 @@ public class Database implements AutoCloseable {
         bufferManager = new BufferManager(diskSpaceManager, recoveryManager, numMemoryPages,
                                               policy);
 
-        if (!initialized) {
-            // create log partition
-            diskSpaceManager.allocPart(0);
-        }
+        // create log partition
+        if (!initialized) diskSpaceManager.allocPart(0);
 
+        // Performs recovery
         recoveryManager.setManagers(diskSpaceManager, bufferManager);
-
-        if (!initialized) {
-            recoveryManager.initialize();
-        }
-
-        // Analysis and undo are both completed once the next line completes
-        Runnable restartRedo = recoveryManager.restart();
-        // The redo phase can be run in parallel with the remaining setup
-        executor.submit(restartRedo);
+        if (!initialized) recoveryManager.initialize();
+        recoveryManager.restart();
 
         Transaction initTransaction = beginTransaction();
         TransactionContext.setTransaction(initTransaction.getTransactionContext());
@@ -235,7 +235,7 @@ public class Database implements AutoCloseable {
         long tableInfoPage0 = DiskSpaceManager.getVirtualPageNum(1, 0);
         diskSpaceManager.allocPage(tableInfoPage0);
 
-        LockContext tableInfoContext = new DummyLockContext();
+        LockContext tableInfoContext = new DummyLockContext("_dummyTableInfo");
         PageDirectory tableInfoPageDir = new PageDirectory(bufferManager, 1, tableInfoPage0, (short) 0,
                 tableInfoContext);
         tableMetadata = new Table(TABLE_INFO_TABLE_NAME, getTableInfoSchema(), tableInfoPageDir,
@@ -246,7 +246,7 @@ public class Database implements AutoCloseable {
     private void initIndexInfo() {
         long indexInfoPage0 = DiskSpaceManager.getVirtualPageNum(2, 0);
         diskSpaceManager.allocPage(indexInfoPage0);
-        LockContext indexInfoContext = new DummyLockContext();
+        LockContext indexInfoContext =  new DummyLockContext("_dummyIndexInfo");
         PageDirectory pageDirectory = new PageDirectory(bufferManager, 2, indexInfoPage0, (short) 0,
                                               indexInfoContext);
         indexMetadata = new Table(INDEX_INFO_TABLE_NAME, getIndexInfoSchema(), pageDirectory, indexInfoContext, stats);
@@ -257,14 +257,14 @@ public class Database implements AutoCloseable {
         // since we manually synchronize both tables to improve concurrency.
 
         // load _metadata.tables
-        LockContext tableInfoContext = new DummyLockContext();
+        LockContext tableInfoContext = new DummyLockContext("_dummyTableInfo");
         PageDirectory tableInfoPageDir = new PageDirectory(bufferManager, 1,
                 DiskSpaceManager.getVirtualPageNum(1, 0), (short) 0, tableInfoContext);
         tableMetadata = new Table(TABLE_INFO_TABLE_NAME, getTableInfoSchema(), tableInfoPageDir,
                 tableInfoContext, stats);
 
         // load _metadata.indices
-        LockContext indexInfoContext = new DummyLockContext();
+        LockContext indexInfoContext = new DummyLockContext("_dummyTableInfo");
         PageDirectory indexInfoPageDir = new PageDirectory(bufferManager, 2,
                 DiskSpaceManager.getVirtualPageNum(2, 0), (short) 0, indexInfoContext);
         indexMetadata = new Table(INDEX_INFO_TABLE_NAME, getIndexInfoSchema(), indexInfoPageDir,
@@ -284,15 +284,8 @@ public class Database implements AutoCloseable {
      */
     @Override
     public synchronized void close() {
-        if (this.executor.isShutdown()) {
-            return;
-        }
-
         // wait for all transactions to terminate
         this.waitAllTransactions();
-
-        // finish executor tasks
-        this.executor.shutdown();
 
         this.bufferManager.evictAll();
 
@@ -303,10 +296,6 @@ public class Database implements AutoCloseable {
 
         this.bufferManager.close();
         this.diskSpaceManager.close();
-    }
-
-    public ExecutorService getExecutor() {
-        return executor;
     }
 
     public LockManager getLockManager() {
@@ -338,15 +327,13 @@ public class Database implements AutoCloseable {
      * 0 | table_name   | string(32)
      * 1 | part_num     | int
      * 2 | page_num     | long
-     * 3 | is_temporary | bool
-     * 4 | schema       | byte array(MAX_SCHEMA_SIZE)
+     * 3 | schema       | byte array(MAX_SCHEMA_SIZE)
      */
-    private Schema getTableInfoSchema() {
+    public Schema getTableInfoSchema() {
         return new Schema()
                 .add("table_name", Type.stringType(32))
                 .add("part_num", Type.intType())
                 .add("page_num", Type.longType())
-                .add("is_temporary", Type.boolType())
                 .add("schema", Type.byteArrayType(MAX_SCHEMA_SIZE));
     }
 
@@ -363,7 +350,7 @@ public class Database implements AutoCloseable {
      * 6 | key_schema_typesize | int
      * 7 | height              | int
      */
-    private Schema getIndexInfoSchema() {
+    public Schema getIndexInfoSchema() {
         return new Schema()
                 .add("table_name", Type.stringType(32))
                 .add("col_name", Type.stringType(32))
@@ -380,14 +367,12 @@ public class Database implements AutoCloseable {
         String tableName;
         int partNum;
         long pageNum;
-        boolean isTemporary;
         Schema schema;
 
         TableMetadata(String tableName) {
             this.tableName = tableName;
             this.partNum = -1;
             this.pageNum = -1;
-            this.isTemporary = false;
             this.schema = new Schema();
         }
 
@@ -395,15 +380,14 @@ public class Database implements AutoCloseable {
             tableName = record.getValue(0).getString();
             partNum = record.getValue(1).getInt();
             pageNum = record.getValue(2).getLong();
-            isTemporary = record.getValue(3).getBool();
-            schema = Schema.fromBytes(ByteBuffer.wrap(record.getValue(4).toBytes()));
+            schema = Schema.fromBytes(ByteBuffer.wrap(record.getValue(3).toBytes()));
         }
 
         Record toRecord() {
             byte[] schemaBytes = schema.toBytes();
             byte[] padded = new byte[MAX_SCHEMA_SIZE];
             System.arraycopy(schemaBytes, 0, padded, 0, schemaBytes.length);
-            return new Record(tableName, partNum, pageNum, isTemporary, padded);
+            return new Record(tableName, partNum, pageNum, padded);
         }
     }
 
@@ -425,6 +409,17 @@ public class Database implements AutoCloseable {
                 Record record = tableMetadata.getRecord(rid);
                 TableMetadata metadata = new TableMetadata(record);
                 result.add(new Pair<>(rid, metadata));
+            }
+        }
+        return result;
+    }
+
+    public List<Record> scanTableMetadataRecords() {
+        List<Record> result = new ArrayList<>();
+        synchronized(tableMetadata) {
+            for(RecordId rid: (Iterable<RecordId>) tableMetadata::ridIterator) {
+                Record record = tableMetadata.getRecord(rid);
+                result.add(record);
             }
         }
         return result;
@@ -467,6 +462,17 @@ public class Database implements AutoCloseable {
                 Record record = indexMetadata.getRecord(rid);
                 BPlusTreeMetadata metadata = new BPlusTreeMetadata(record);
                 result.add(new Pair<>(rid, metadata));
+            }
+        }
+        return result;
+    }
+
+    public List<Record> scanIndexMetadataRecords() {
+        List<Record> result = new ArrayList<>();
+        synchronized(indexMetadata) {
+            for(RecordId rid: (Iterable<RecordId>) indexMetadata::ridIterator) {
+                Record record = indexMetadata.getRecord(rid);
+                result.add(record);
             }
         }
         return result;
@@ -592,22 +598,6 @@ public class Database implements AutoCloseable {
         return t;
     }
 
-    /**
-     * Gets the transaction number counter. This is the number of transactions that
-     * have been created so far, and also the number of the next transaction to be created.
-     */
-    private synchronized long getTransactionCounter() {
-        return this.numTransactions;
-    }
-
-    /**
-     * Updates the transaction number counter.
-     * @param newTransactionCounter new transaction number counter
-     */
-    private synchronized void setTransactionCounter(long newTransactionCounter) {
-        this.numTransactions = newTransactionCounter;
-    }
-
     private class TransactionContextImpl extends TransactionContext {
         long transNum;
         Map<String, String> aliases;
@@ -639,8 +629,8 @@ public class Database implements AutoCloseable {
             int partNum = diskSpaceManager.allocPart();
             long pageNum = diskSpaceManager.allocPage(partNum);
             // We can use dummy contexts since this table will only be visible from the current transaction
-            PageDirectory pageDirectory = new PageDirectory(bufferManager, partNum, pageNum, (short) 0, new DummyLockContext());
-            tempTables.put(tempTableName, new Table(tableName, schema, pageDirectory, new DummyLockContext(), stats));
+            PageDirectory pageDirectory = new PageDirectory(bufferManager, partNum, pageNum, (short) 0, new DummyLockContext("_dummyPageDir"));
+            tempTables.put(tempTableName, new Table(tableName, schema, pageDirectory, new DummyLockContext("_dummyTempTable" + tempTableName), stats));
             return tempTableName;
         }
 
@@ -809,6 +799,7 @@ public class Database implements AutoCloseable {
         }
 
         @Override
+        @Deprecated
         public void updateRecordWhere(String tableName, String targetColumnName,
                                       UnaryOperator<DataBox> targetValue,
                                       String predColumnName, PredicateOperator predOperator, DataBox predValue) {
@@ -817,8 +808,9 @@ public class Database implements AutoCloseable {
             Iterator<RecordId> recordIds = tab.ridIterator();
 
             Schema s = tab.getSchema();
-            int uindex = s.getFieldNames().indexOf(targetColumnName);
-            int pindex = s.getFieldNames().indexOf(predColumnName);
+            int uindex = s.findField(targetColumnName);
+            int pindex = -1;
+            if (predColumnName != null) pindex = s.findField(predColumnName);
 
             while(recordIds.hasNext()) {
                 RecordId curRID = recordIds.next();
@@ -832,7 +824,26 @@ public class Database implements AutoCloseable {
             }
         }
 
+        public void updateRecordWhere(String tableName, String targetColumnName, Function<Record, DataBox> targetValue, Function<Record, DataBox> condition) {
+            Table tab = getTable(tableName);
+            tableName = tab.getName();
+            Iterator<RecordId> recordIds = tab.ridIterator();
+            Schema s = tab.getSchema();
+            int uindex = s.findField(targetColumnName);
+
+            while(recordIds.hasNext()) {
+                RecordId curRID = recordIds.next();
+                Record cur = getRecord(tableName, curRID);
+                List<DataBox> recordCopy = cur.getValues();
+                DataBox cond = condition.apply(cur);
+                if (!DataFunction.toBool(cond)) continue;
+                recordCopy.set(uindex, targetValue.apply(cur));
+                updateRecord(tableName, curRID, new Record(recordCopy));
+            }
+        }
+
         @Override
+        @Deprecated
         public void deleteRecordWhere(String tableName, String predColumnName,
                                       PredicateOperator predOperator, DataBox predValue) {
             Table tab = getTable(tableName);
@@ -850,6 +861,20 @@ public class Database implements AutoCloseable {
                 if (predOperator == null || predOperator.evaluate(recordCopy.get(pindex), predValue)) {
                     deleteRecord(tableName, curRID);
                 }
+            }
+        }
+
+        public void deleteRecordWhere(String tableName, Function<Record, DataBox> condition) {
+            Table tab = getTable(tableName);
+            tableName = tab.getName();
+            Iterator<RecordId> recordIds = tab.ridIterator();
+
+            while(recordIds.hasNext()) {
+                RecordId curRID = recordIds.next();
+                Record cur = getRecord(tableName, curRID);
+                DataBox cond = condition.apply(cur);
+                if (!DataFunction.toBool(cond)) continue;
+                deleteRecord(tableName, curRID);
             }
         }
 
@@ -955,25 +980,36 @@ public class Database implements AutoCloseable {
         }
 
         @Override
+        public Optional<QueryPlan> execute(String statement) {
+            RookieParser parser = new RookieParser(new ByteArrayInputStream(statement.getBytes()));
+            ASTExecutableStatement stmt;
+            try {
+                stmt = parser.executable_stmt();
+            } catch (ParseException p) {
+                throw new DatabaseException(p.getMessage());
+            }
+            ExecutableStatementVisitor visitor = new ExecutableStatementVisitor();
+            stmt.jjtAccept(visitor, null);
+            Optional<QueryPlan> qp = visitor.execute(this);
+            return qp;
+        }
+
+        @Override
         protected void startCommit() {
-            // TODO(proj5): replace immediate cleanup() call with job (the commented out code)
-
-            transactionContext.deleteAllTempTables();
-
+            TransactionContext.setTransaction(this.transactionContext);
+            try {
+                transactionContext.deleteAllTempTables();
+            } finally {
+                TransactionContext.unsetTransaction();
+            }
             recoveryManager.commit(transNum);
-
             this.cleanup();
-            /*
-            executor.execute(this::cleanup);
-            */
         }
 
         @Override
         protected void startRollback() {
-            executor.execute(() -> {
-                recoveryManager.abort(transNum);
-                this.cleanup();
-            });
+            recoveryManager.abort(transNum);
+            this.cleanup();
         }
 
         @Override
@@ -1014,7 +1050,6 @@ public class Database implements AutoCloseable {
                 TableMetadata metadata = new TableMetadata(tableName);
                 metadata.partNum = diskSpaceManager.allocPart();
                 metadata.pageNum = diskSpaceManager.allocPage(metadata.partNum);
-                metadata.isTemporary = false;
                 metadata.schema = s;
                 synchronized (tableMetadata) {
                     tableMetadata.addRecord(metadata.toRecord());
@@ -1034,7 +1069,7 @@ public class Database implements AutoCloseable {
                 // To check whether the table exists we just need to read that table's metadata, if it exists
                 Pair<RecordId, TableMetadata> pair = getTableMetadata(tableName);
                 if (pair == null) {
-                    throw new DatabaseException("table `" + tableName + "` already exists");
+                    throw new DatabaseException("table `" + tableName + "` doesn't exist!");
                 }
                 // To drop a table we'll need exclusive access to it's metadata and the metadata of its indices
                 LockUtil.ensureSufficientLockHeld(getTableMetadataContext(tableName), LockType.X);
@@ -1183,11 +1218,31 @@ public class Database implements AutoCloseable {
         }
 
         @Override
+        public void update(String tableName, String targetColumnName, Function<Record, DataBox> expr, Function<Record, DataBox> cond) {
+            TransactionContext.setTransaction(transactionContext);
+            try {
+                transactionContext.updateRecordWhere(tableName, targetColumnName, expr, cond);
+            } finally {
+                TransactionContext.unsetTransaction();
+            }
+        }
+
+        @Override
         public void delete(String tableName, String predColumnName, PredicateOperator predOperator,
                            DataBox predValue) {
             TransactionContext.setTransaction(transactionContext);
             try {
                 transactionContext.deleteRecordWhere(tableName, predColumnName, predOperator, predValue);
+            } finally {
+                TransactionContext.unsetTransaction();
+            }
+        }
+
+        @Override
+        public void delete(String tableName, Function<Record, DataBox> cond) {
+            TransactionContext.setTransaction(transactionContext);
+            try {
+                transactionContext.deleteRecordWhere(tableName, cond);
             } finally {
                 TransactionContext.unsetTransaction();
             }

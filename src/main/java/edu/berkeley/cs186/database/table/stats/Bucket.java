@@ -1,7 +1,7 @@
 package edu.berkeley.cs186.database.table.stats;
 
-import java.util.Objects;
 import java.util.HashSet;
+import java.util.Objects;
 
 /**
  * A histogram bucket

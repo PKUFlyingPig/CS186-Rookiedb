@@ -6,7 +6,6 @@ import edu.berkeley.cs186.database.common.iterator.EmptyBacktrackingIterator;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
 
-import java.util.Iterator;
 import java.util.List;
 
 /**

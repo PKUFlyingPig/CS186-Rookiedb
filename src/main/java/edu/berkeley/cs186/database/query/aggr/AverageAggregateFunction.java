@@ -1,6 +1,9 @@
 package edu.berkeley.cs186.database.query.aggr;
 
-import edu.berkeley.cs186.database.databox.*;
+import edu.berkeley.cs186.database.databox.DataBox;
+import edu.berkeley.cs186.database.databox.FloatDataBox;
+import edu.berkeley.cs186.database.databox.Type;
+import edu.berkeley.cs186.database.databox.TypeId;
 
 /**
  * An AVG aggregate keeps a cumulative sum of the values it has seen and returns
