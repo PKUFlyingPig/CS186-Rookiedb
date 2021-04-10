@@ -392,8 +392,9 @@ public class TestDatabaseRecoveryIntegration {
         while (records.hasNext()) oldRecords.add(records.next());
 
         t1.delete("Students", "gpa", PredicateOperator.GREATER_THAN_EQUALS, DataBox.fromObject(1.86));
+        db.getBufferManager().evictAll();
 
-        // Note: T1 never commits!
+        // Note: Changes flushed, but T1 never commits!
         Database old = this.db;
         reloadDatabase(false);
         try (Transaction t2 = db.beginTransaction()) {
