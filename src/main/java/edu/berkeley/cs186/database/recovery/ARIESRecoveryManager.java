@@ -404,10 +404,13 @@ public class ARIESRecoveryManager implements RecoveryManager {
         LogRecord beginRecord = new BeginCheckpointLogRecord();
         long beginLSN = logManager.appendToLog(beginRecord);
 
+        Map<Long, Long> chkptDPT = new HashMap<>();
+        Map<Long, Pair<Transaction.Status, Long>> chkptTxnTable = new HashMap<>();
+
         // TODO(proj5): generate end checkpoint record(s) for DPT and transaction table
 
         // Last end checkpoint record
-        LogRecord endRecord = new EndCheckpointLogRecord(dpt, txnTable);
+        LogRecord endRecord = new EndCheckpointLogRecord(chkptDPT, chkptTxnTable);
         logManager.appendToLog(endRecord);
         // Ensure checkpoint is fully flushed before updating the master record
         flushToLSN(endRecord.getLSN());
