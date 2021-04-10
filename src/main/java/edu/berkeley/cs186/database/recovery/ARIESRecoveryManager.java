@@ -482,7 +482,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
      *
      * If the log record is page-related, update the dpt
      *   - update/undoupdate page will dirty pages
-     *   - free/undoalloc page always flush changes to disk)
+     *   - free/undoalloc page always flush changes to disk
      *   - no action needed for alloc/undofree page
      *
      * If the log record is for a change in transaction status:
