@@ -217,7 +217,7 @@ public class TestRecoveryManager {
 
         // Transaction should have completed and removed from the transaction table.
         // Redoing the updateCLR should have dirtied page 10000000001.
-        assertEquals(t1.getStatus(), Transaction.Status.COMPLETE);
+        assertEquals(Transaction.Status.COMPLETE, t1.getStatus());
         assertTrue(transactionTable.isEmpty());
         assertEquals(Collections.singletonMap(10000000001L, updateCLR.getLSN()), dirtyPageTable);
     }

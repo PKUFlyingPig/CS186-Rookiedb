@@ -139,9 +139,7 @@ public abstract class LogRecord {
     /**
      * Returns a CLR undoing this log record, but does not execute the undo.
      * @param lastLSN lastLSN for the CLR
-     * @return the CLR corresponding to this log record, and a boolean that is true
-     *         if the log must be flushed up to the CLR after executing the undo,
-     *         and false otherwise.
+     * @return the CLR corresponding to this log record.
      */
     public LogRecord undo(long lastLSN) {
         throw new UnsupportedOperationException("cannot undo this record: " + this);
