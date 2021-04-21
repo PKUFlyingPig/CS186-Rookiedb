@@ -504,7 +504,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
      *
      * After all records are processed, cleanup and end transactions that are in
      * the COMMITING state, and move all transactions in the RUNNING state to
-     * RECOVERY_ABORTING.
+     * RECOVERY_ABORTING/emit an abort record.
      */
     void restartAnalysis() {
         // Read master record
