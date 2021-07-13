@@ -11,6 +11,8 @@ import edu.berkeley.cs186.database.table.RecordId;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import javax.swing.text.html.Option;
+import javax.xml.crypto.Data;
 
 /**
  * A inner node of a B+ tree. Every inner node in a B+ tree of order d stores
@@ -98,8 +100,40 @@ class InnerNode extends BPlusNode {
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
         // TODO(proj2): implement
+        BPlusNode child = BPlusNode.fromBytes(metadata, bufferManager, treeContext, children.get(numLessThanEqual(key, keys)));
+        Optional<Pair<DataBox, Long>> splitInfo = child.put(key, rid);
+        if (!splitInfo.isPresent()) {
+            // the child does not split, return Optional.empty()
+            return splitInfo;
+        } else {
+            // the child split, insert the (split_key, child_node_pageNum) into this node
+            Pair<DataBox, Long> info = splitInfo.get();
+            int index = InnerNode.numLessThan(key, keys);
+            keys.add(index, info.getFirst());
+            children.add(index + 1, info.getSecond());
 
-        return Optional.empty();
+            if (keys.size() <= metadata.getOrder() * 2) {
+                // Case 1: If inserting the pair (k, c) does NOT cause leaf to overflow, Optional.empty() is returned.
+                sync();
+                return Optional.empty();
+            } else {
+                // Case 2: If inserting the pair (k, c) does cause the node n to overflow, a pair (split_key, right_node_page_num) is returned.
+                DataBox split_key = keys.get(metadata.getOrder());
+                List<DataBox> right_keys = keys.subList(metadata.getOrder() + 1, keys.size());
+                List<Long> right_children = children.subList(metadata.getOrder() + 1, children.size());
+
+                keys = keys.subList(0, metadata.getOrder());
+                children = children.subList(0, metadata.getOrder() + 1);
+                sync();
+
+                Page new_page = bufferManager.fetchNewPage(treeContext, metadata.getPartNum());
+                InnerNode new_rightSibling = new InnerNode(metadata, bufferManager, new_page, right_keys, right_children,
+                    treeContext);
+
+                return Optional.of(new Pair(split_key, new_page.getPageNum()));
+            }
+        }
+
     }
 
     // See BPlusNode.bulkLoad.

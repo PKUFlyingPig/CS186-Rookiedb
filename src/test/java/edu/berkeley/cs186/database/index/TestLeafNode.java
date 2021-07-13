@@ -153,6 +153,41 @@ public class TestLeafNode {
 
     @Test
     @Category(PublicTests.class)
+    public void testOverflowPuts() {
+        int d = 5;
+        setBPlusTreeMetadata(Type.intType(), d);
+        LeafNode leaf = getEmptyLeaf(Optional.empty());
+        // populate the leaf
+        for (int i = 0; i < 2 * d; ++i) {
+            assertEquals(Optional.empty(), leaf.put(new IntDataBox(i), new RecordId(i, (short) i)));
+        }
+        // this insert will cause split
+        Optional<Pair<DataBox, Long>> splitInfo = leaf.put(new IntDataBox(2 * d), new RecordId(2 * d, (short) (2 * d)));
+        assertTrue(splitInfo.isPresent());
+        DataBox split_key = splitInfo.get().getFirst();
+        assertEquals(new IntDataBox(d), split_key);
+        long pageNum = splitInfo.get().getSecond();
+
+        Optional<LeafNode> opt_rightSibling = leaf.getRightSibling();
+        assertTrue(opt_rightSibling.isPresent());
+        LeafNode rightSibling = opt_rightSibling.get();
+        assertEquals(pageNum, rightSibling.getPage().getPageNum());
+
+        for (int j = 0; j < d; j++) {
+            DataBox key = new IntDataBox(j);
+            RecordId rid = new RecordId(j, (short) j);
+            assertEquals(Optional.of(rid), leaf.getKey(key));
+        }
+
+        for (int j = d; j <= 2 * d; j++) {
+            DataBox key = new IntDataBox(j);
+            RecordId rid = new RecordId(j, (short) j);
+            assertEquals(Optional.of(rid), rightSibling.getKey(key));
+        }
+    }
+
+    @Test
+    @Category(PublicTests.class)
     public void testNoOverflowPutsFromDisk() {
         // Requires both fromBytes and put to be implemented correctly.
         int d = 5;
