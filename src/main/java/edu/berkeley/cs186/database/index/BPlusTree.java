@@ -10,6 +10,7 @@ import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
+import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.RecordId;
 
 import java.io.FileWriter;
@@ -202,8 +203,7 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): Return a BPlusTreeIterator.
-
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator(root.getLeftmostLeaf());
     }
 
     /**
@@ -235,8 +235,8 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): Return a BPlusTreeIterator.
-
-        return Collections.emptyIterator();
+        LeafNode startNode = root.get(key);
+        return new BPlusTreeIterator(startNode, key);
     }
 
     /**
@@ -317,7 +317,7 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): implement
-
+        root.remove(key);
         return;
     }
 
@@ -431,19 +431,42 @@ public class BPlusTree {
     // Iterator ////////////////////////////////////////////////////////////////
     private class BPlusTreeIterator implements Iterator<RecordId> {
         // TODO(proj2): Add whatever fields and constructors you want here.
+        LeafNode currNode;
+        Iterator<RecordId> currIter;
 
+        BPlusTreeIterator(LeafNode node) {
+            currNode = node;
+            currIter = currNode.scanAll();
+        }
+
+        BPlusTreeIterator(LeafNode node, DataBox key) {
+            currNode = node;
+            currIter = node.scanGreaterEqual(key);
+        }
         @Override
         public boolean hasNext() {
             // TODO(proj2): implement
-
-            return false;
+            if (currIter.hasNext()) return true;
+            else {
+                // currNode has been scanned over
+                Optional<LeafNode> opt_rightSibling = currNode.getRightSibling();
+                if (opt_rightSibling.isPresent()) {
+                    currNode = opt_rightSibling.get();
+                    currIter = currNode.scanAll();
+                    return true;
+                } else {
+                    return false;
+                }
+            }
         }
 
         @Override
         public RecordId next() {
             // TODO(proj2): implement
-
-            throw new NoSuchElementException();
+            if (currIter.hasNext()) return currIter.next();
+            else {
+                throw new NoSuchElementException();
+            }
         }
     }
 }

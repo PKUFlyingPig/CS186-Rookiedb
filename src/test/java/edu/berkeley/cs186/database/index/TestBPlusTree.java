@@ -16,6 +16,7 @@ import edu.berkeley.cs186.database.io.MemoryDiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.ClockEvictionPolicy;
 import edu.berkeley.cs186.database.recovery.DummyRecoveryManager;
+import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.RecordId;
 import org.junit.After;
 import org.junit.Before;
@@ -408,6 +409,36 @@ public class TestBPlusTree {
 
     @Test
     @Category(PublicTests.class)
+    public void testScanAll() {
+        BPlusTree tree = getBPlusTree(Type.intType(), 1);
+        for (int i = 0; i < 40; i++) {
+            tree.put(new IntDataBox(i), new RecordId(i, (short) i));
+        }
+        Iterator<RecordId> iter = tree.scanAll();
+        int i = 0;
+        while (iter.hasNext()) {
+            assertEquals(new RecordId(i, (short) i), iter.next());
+            ++i;
+        }
+    }
+
+    @Test
+    @Category(PublicTests.class)
+    public void testScanGreaterEqual() {
+        BPlusTree tree = getBPlusTree(Type.intType(), 3);
+        for (int i = 0; i < 40; i++) {
+            tree.put(new IntDataBox(i), new RecordId(i, (short) i));
+        }
+        Iterator<RecordId> iter = tree.scanGreaterEqual(new IntDataBox(10));
+        int i = 10;
+        while (iter.hasNext()) {
+            assertEquals(new RecordId(i, (short) i), iter.next());
+            ++i;
+        }
+    }
+
+    @Test
+    @Category(PublicTests.class)
     public void testRandomPuts() {
         // This test will generate 1000 keys and for trees of degree 2, 3 and 4
         // will scramble the keys and attempt to insert them.
@@ -421,7 +452,7 @@ public class TestBPlusTree {
         List<DataBox> keys = new ArrayList<>();
         List<RecordId> rids = new ArrayList<>();
         List<RecordId> sortedRids = new ArrayList<>();
-        for (int i = 0; i < 1000; ++i) {
+        for (int i = 0; i < 10; ++i) {
             keys.add(new IntDataBox(i));
             rids.add(new RecordId(i, (short) i));
             sortedRids.add(new RecordId(i, (short) i));
