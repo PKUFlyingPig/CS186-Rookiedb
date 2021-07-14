@@ -17,6 +17,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.*;
+import javax.xml.crypto.Data;
 
 /**
  * A persistent B+ tree.
@@ -240,6 +241,27 @@ public class BPlusTree {
     }
 
     /**
+     * split the root with the new root has key
+     * this helper function is used by put and buldLoad
+     *                 newRoot
+     *                /       \
+     *               /         \
+     *        originalRoot    child
+     *
+     * @param key : the key in the new root
+     * @param child : the right child of the newRoot
+     */
+    private void splitRoot(DataBox key, Long child) {
+        List<DataBox> keys = new ArrayList<>();
+        keys.add(key); // insert split_key into the new root
+        List<Long> children = new ArrayList<>();
+        children.add(root.getPage().getPageNum()); // left child : original root
+        children.add(child); // right child : new_split node
+        BPlusNode newRoot = new InnerNode(metadata, bufferManager, keys, children, lockContext);
+        updateRoot(newRoot);
+    }
+
+    /**
      * Inserts a (key, rid) pair into a B+ tree. If the key already exists in
      * the B+ tree, then the pair is not inserted and an exception is raised.
      *
@@ -260,13 +282,7 @@ public class BPlusTree {
         Optional<Pair<DataBox, Long>> splitInfo = root.put(key, rid);
         if (splitInfo.isPresent()) {
             // split the root
-            List<DataBox> keys = new ArrayList<>();
-            keys.add(splitInfo.get().getFirst()); // insert split_key into the new root
-            List<Long> children = new ArrayList<>();
-            children.add(root.getPage().getPageNum()); // left child : original root
-            children.add(splitInfo.get().getSecond()); // right child : new_split node
-            BPlusNode newRoot = new InnerNode(metadata, bufferManager, keys, children, lockContext);
-            updateRoot(newRoot);
+            splitRoot(splitInfo.get().getFirst(), splitInfo.get().getSecond());
         }
         return;
     }
@@ -296,7 +312,15 @@ public class BPlusTree {
         // Note: You should NOT update the root variable directly.
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
-
+        if (scanAll().hasNext()) {
+            throw new RuntimeException("buldLoad must be called in an empty tree");
+        }
+        while (data.hasNext()) {
+            Optional<Pair<DataBox, Long>> splitInfo = root.bulkLoad(data, fillFactor);
+            if (splitInfo.isPresent()) {
+                splitRoot(splitInfo.get().getFirst(), splitInfo.get().getSecond());
+            }
+        }
         return;
     }
 

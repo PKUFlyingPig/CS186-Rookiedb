@@ -96,6 +96,33 @@ class InnerNode extends BPlusNode {
         return LeftmostChild.getLeftmostLeaf();
     }
 
+    private Optional<Pair<DataBox, Long>> insert(DataBox key, Long child) {
+        int index = InnerNode.numLessThan(key, keys);
+        keys.add(index, key);
+        children.add(index + 1, child);
+
+        if (keys.size() <= metadata.getOrder() * 2) {
+            // Case 1: If inserting the pair (k, c) does NOT cause leaf to overflow, Optional.empty() is returned.
+            sync();
+            return Optional.empty();
+        } else {
+            // Case 2: If inserting the pair (k, c) does cause the node n to overflow, a pair (split_key, right_node_page_num) is returned.
+            DataBox split_key = keys.get(metadata.getOrder());
+            List<DataBox> right_keys = keys.subList(metadata.getOrder() + 1, keys.size());
+            List<Long> right_children = children.subList(metadata.getOrder() + 1, children.size());
+
+            keys = keys.subList(0, metadata.getOrder());
+            children = children.subList(0, metadata.getOrder() + 1);
+            sync();
+
+            InnerNode new_rightSibling = new InnerNode(metadata, bufferManager, right_keys,
+                right_children,
+                treeContext);
+
+            return Optional.of(new Pair(split_key, new_rightSibling.getPage().getPageNum()));
+        }
+    }
+
     // See BPlusNode.put.
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
@@ -108,29 +135,7 @@ class InnerNode extends BPlusNode {
         } else {
             // the child split, insert the (split_key, child_node_pageNum) into this node
             Pair<DataBox, Long> info = splitInfo.get();
-            int index = InnerNode.numLessThan(key, keys);
-            keys.add(index, info.getFirst());
-            children.add(index + 1, info.getSecond());
-
-            if (keys.size() <= metadata.getOrder() * 2) {
-                // Case 1: If inserting the pair (k, c) does NOT cause leaf to overflow, Optional.empty() is returned.
-                sync();
-                return Optional.empty();
-            } else {
-                // Case 2: If inserting the pair (k, c) does cause the node n to overflow, a pair (split_key, right_node_page_num) is returned.
-                DataBox split_key = keys.get(metadata.getOrder());
-                List<DataBox> right_keys = keys.subList(metadata.getOrder() + 1, keys.size());
-                List<Long> right_children = children.subList(metadata.getOrder() + 1, children.size());
-
-                keys = keys.subList(0, metadata.getOrder());
-                children = children.subList(0, metadata.getOrder() + 1);
-                sync();
-
-                InnerNode new_rightSibling = new InnerNode(metadata, bufferManager, right_keys, right_children,
-                    treeContext);
-
-                return Optional.of(new Pair(split_key, new_rightSibling.getPage().getPageNum()));
-            }
+            return insert(info.getFirst(), info.getSecond());
         }
 
     }
@@ -140,8 +145,24 @@ class InnerNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
             float fillFactor) {
         // TODO(proj2): implement
-
-        return Optional.empty();
+        BPlusNode rightMostChild = BPlusNode.fromBytes(metadata, bufferManager, treeContext, children.get(children.size() - 1));
+        Optional<Pair<DataBox, Long>> splitInfo = rightMostChild.bulkLoad(data, fillFactor);
+        if (!splitInfo.isPresent()) {
+            // child does not split
+            return splitInfo;
+        } else {
+            // child split
+            DataBox split_key = splitInfo.get().getFirst();
+            Long child = splitInfo.get().getSecond();
+            Optional<Pair<DataBox, Long>> mySplitInfo = insert(split_key, child);
+            if (!mySplitInfo.isPresent()) {
+                // this inner node does not split, call bulk load recursively
+                return bulkLoad(data, fillFactor);
+            } else {
+                // this inner node split
+                return mySplitInfo;
+            }
+        }
     }
 
     // See BPlusNode.remove.

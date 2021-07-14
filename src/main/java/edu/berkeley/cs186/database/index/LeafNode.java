@@ -12,6 +12,7 @@ import edu.berkeley.cs186.database.table.RecordId;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import javax.xml.crypto.Data;
 
 /**
  * A leaf of a B+ tree. Every leaf in a B+ tree of order d stores between d and
@@ -197,8 +198,26 @@ class LeafNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
             float fillFactor) {
         // TODO(proj2): implement
-
-        return Optional.empty();
+        int maxRecords = (int)Math.ceil(fillFactor * metadata.getOrder() * 2);
+        while (keys.size() < maxRecords && data.hasNext()) {
+            Pair<DataBox, RecordId> p = data.next();
+            keys.add(p.getFirst());
+            rids.add(p.getSecond());
+        }
+        // if there is more data, then split
+        Optional<Pair<DataBox, Long>> ret = Optional.empty();
+        if (data.hasNext()) {
+            List<DataBox> new_keys = new ArrayList<>();
+            List<RecordId> new_rids = new ArrayList<>();
+            Pair<DataBox, RecordId> p = data.next();
+            new_keys.add(p.getFirst());
+            new_rids.add(p.getSecond());
+            LeafNode new_rightSibling = new LeafNode(metadata, bufferManager, new_keys, new_rids, rightSibling, treeContext);
+            rightSibling = Optional.of(new_rightSibling.getPage().getPageNum());
+            ret = Optional.of(new Pair(p.getFirst(), rightSibling.get()));
+        }
+        sync();
+        return ret;
     }
 
     // See BPlusNode.remove.
