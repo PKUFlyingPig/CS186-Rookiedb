@@ -57,7 +57,7 @@ public class TestSortMergeJoin {
     // 4 second max per method tested.
     @Rule
     public TestRule globalTimeout = new DisableOnDebug(Timeout.millis((long) (
-            4000 * TimeoutScaling.factor)));
+            8000 * TimeoutScaling.factor)));
 
     private void startCountIOs() {
         d.getBufferManager().evictAll();
