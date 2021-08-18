@@ -127,8 +127,9 @@ public class LockManager {
             LockRequest request;
             while (requests.hasNext()) {
                 request = requests.next();
-                waitingQueue.removeFirst();
                 if (checkCompatible(request.lock.lockType, request.transaction.getTransNum())) {
+                    // remove the request from queue
+                    waitingQueue.removeFirst();
                     // grant lock
                     grantOrUpdateLock(request.lock);
                     // release lock
