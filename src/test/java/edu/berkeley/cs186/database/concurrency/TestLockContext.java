@@ -60,6 +60,16 @@ public class TestLockContext {
 
     @Test
     @Category(PublicTests.class)
+    public void testUniqueness() {
+        ResourceName database = new ResourceName("database");
+        ResourceName table1 = new ResourceName(database, "table1");
+        ResourceName page1 = new ResourceName(table1, "page1");
+        LockContext samePageLockContext = LockContext.fromResourceName(lockManager, page1);
+        assertEquals(pageLockContext, samePageLockContext);
+    }
+
+    @Test
+    @Category(PublicTests.class)
     public void testSimpleAcquireFail() {
         dbLockContext.acquire(transactions[0], LockType.IS);
         try {

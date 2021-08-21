@@ -203,7 +203,8 @@ public class LockContext {
             List<ResourceName> sisDesc = sisDescendants(transaction);
             // update numChildLocks
             updateChildLockNum(transaction.getTransNum(), -1, sisDesc);
-            // release the locks simultaneously
+            // release the locks simultaneously (including lock in this level)
+            sisDesc.add(name);
             lockman.acquireAndRelease(transaction, name, newLockType, sisDesc);
         } else {
             lockman.promote(transaction, name, newLockType);
@@ -290,7 +291,8 @@ public class LockContext {
         if (!descendants.isEmpty()) {
             updateChildLockNum(transaction.getTransNum(), -1, descendants);
         }
-        // acquire&release simultaneously
+        // acquire&release simultaneously (also need to release thisLevelLock simultaneously)
+        descendants.add(name);
         if (toX) {
             lockman.acquireAndRelease(transaction, name, LockType.X, descendants);
         } else {

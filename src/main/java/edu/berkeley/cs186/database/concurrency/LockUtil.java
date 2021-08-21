@@ -42,8 +42,49 @@ public class LockUtil {
         LockType explicitLockType = lockContext.getExplicitLockType(transaction);
 
         // TODO(proj4_part2): implement
+        // case 1: The current lock type can effectively substitute the requested type
+        if (LockType.substitutable(effectiveLockType, requestType)) return;
+
+        // case 2: The current lock type is IX and the requested lock is S
+        if (explicitLockType == LockType.IX && requestType == LockType.S) {
+            lockContext.promote(transaction, LockType.SIX);
+            return;
+        }
+
+        // case 3: The current lock type is an intent lock
+        if (explicitLockType.isIntent()) {
+            lockContext.escalate(transaction);
+            explicitLockType = lockContext.getExplicitLockType(transaction);
+            if (explicitLockType == requestType || explicitLockType == LockType.X) return;
+        }
+
+        // case 4: None of the above (now explicit lock type can only be S or NL)
+        // more specifically, the (explicit lock type, request type) pair can only be (NL, S), (NL, X), (S, X)
+        if (requestType == LockType.S) {
+            enforceLock(transaction, parentContext, LockType.IS);
+        } else {
+            enforceLock(transaction, parentContext, LockType.IX);
+        }
+        if (explicitLockType == LockType.NL) {
+            lockContext.acquire(transaction, requestType);
+        } else {
+            lockContext.promote(transaction, requestType);
+        }
         return;
     }
 
     // TODO(proj4_part2) add any helper methods you want
+    private static void enforceLock(TransactionContext transaction, LockContext lockContext, LockType lockType) {
+        assert (lockType == LockType.IS || lockType == LockType.IX);
+        if (lockContext == null) return;
+        enforceLock(transaction, lockContext.parentContext(), lockType);
+        LockType currLockType = lockContext.getExplicitLockType(transaction);
+        if (!LockType.substitutable(currLockType, lockType)) {
+            if (currLockType == LockType.NL) {
+                lockContext.acquire(transaction, lockType);
+            } else {
+                lockContext.promote(transaction, lockType);
+            }
+        }
+    }
 }
